@@ -452,7 +452,12 @@ impl Reader {
     }
 
     fn calibration(&self) -> PyResult<Calibration> {
-        let inner = self.inner.lock().unwrap().calibration().map_err(to_py_err)?;
+        let inner = self
+            .inner
+            .lock()
+            .unwrap()
+            .calibration()
+            .map_err(to_py_err)?;
         Ok(Calibration { inner })
     }
 
