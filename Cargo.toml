@@ -1,0 +1,25 @@
+[package]
+name = "opentdf"
+version = "0.1.1"
+edition = "2021"
+rust-version = "1.75"
+description = "Pure-Rust parser for Bruker timsTOF .d/ (TDF) mass spectrometry bundles."
+authors = ["Nathan Riley <git@nathanriley.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/Sigilweaver/OpenTDF"
+homepage = "https://github.com/Sigilweaver/OpenTDF"
+readme = "README.md"
+keywords = ["mass-spectrometry", "bruker", "timstof", "tdf", "proteomics"]
+categories = ["parser-implementations", "science"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+thiserror = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
+zstd = "0.13"
+
+[[example]]
+name = "dump"
+path = "examples/dump.rs"

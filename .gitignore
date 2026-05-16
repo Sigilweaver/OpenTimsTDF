@@ -1,0 +1,25 @@
+# Rust build output
+/target
+target/
+Cargo.lock
+
+# Reverse-engineering workspace -- never tracked
+/re/
+
+# Corpus data (large binary bundles, not redistributed)
+/corpus/
+nohup.out
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+*.egg-info/
+.venv/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
