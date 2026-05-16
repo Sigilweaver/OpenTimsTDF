@@ -159,5 +159,5 @@ is ~ 1.0 and the discrepancy is negligible.
 
 Occasional decoded TOF values slightly exceed
 `GlobalMetadata.DigitizerNumSamples` (~ 0.8% overflow in the worst
-observed frame). This appears to be a Bruker-side overflow window and
+observed frame). This appears to be an upstream overflow window and
 is preserved as-is.

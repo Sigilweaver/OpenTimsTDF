@@ -13,7 +13,7 @@ use crate::types::{
     PrmTarget,
 };
 
-/// One Bruker `.d/` bundle on disk.
+/// One `.d/` (TDF) bundle on disk.
 pub struct Reader {
     bundle_dir: PathBuf,
     conn: Connection,

@@ -17,9 +17,9 @@ Initial public release. Covers:
 
 - SQLite metadata access via bundled `rusqlite`.
 - Codec 1 (LZF + signed-delta) and Codec 2 (zstd + byte-transpose + delta)
-  frame decoders, in pure Rust.
-- TOF to m/z and scan to 1/K0 calibration using the open-source
-  linear-in-sqrt(m/z) model (< 2 ppm vs. vendor).
+  frame decoders.
+- TOF to m/z and scan to 1/K0 calibration using the
+  linear-in-sqrt(m/z) model.
 - diaPASEF, PASEF DDA, and prm-PASEF metadata helpers.
 - Schema versions 3.1, 3.3, 3.5, 3.6, 3.7.
 

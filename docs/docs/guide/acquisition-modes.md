@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Acquisition modes
 
-Bruker timsTOF instruments emit a small set of acquisition modes.
+The TDF format records a small set of acquisition modes.
 OpenTDF identifies them through the `Frames.ScanMode` / `MsMsType`
 columns and exposes the mode-specific metadata via dedicated reader
 methods.

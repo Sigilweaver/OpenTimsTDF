@@ -13,7 +13,8 @@ Copyright 2026 Sigilweaver Holdings LLC.
 
 ## Third-party attribution
 
-OpenTDF builds on prior open-source reverse-engineering work. See
+OpenTDF builds on prior open-source work; the TDF format and codecs
+were worked out from public sample data (PRIDE accessions). See
 [ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTDF/blob/main/ATTRIBUTION.md)
 in the repository for the full list.
 

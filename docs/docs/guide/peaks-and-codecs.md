@@ -19,9 +19,7 @@ pub struct Peak {
 }
 ```
 
-The output is a flat `Vec<Peak>` for a frame. Peaks are emitted in
-`(scan, tof)` order. Bruker's vendor SDK exposes the same data shape;
-the byte-level decoding is what differs.
+The output is a flat `Vec<Peak>` for a frame, in `(scan, tof)` order.
 
 ## Codec dispatch
 
@@ -30,7 +28,7 @@ value, which determines the decode path used by `decode_peaks`:
 
 | Value | Codec | Pipeline |
 | ----- | ----- | -------- |
-| 1     | LZF + signed-delta TOF | One LZF blob per scan, signed-delta-encoded TOF stream. Pure-Rust LZF decoder; no `liblzf` dependency. |
+| 1     | LZF + signed-delta TOF | One LZF blob per scan, signed-delta-encoded TOF stream. Includes a Rust LZF decoder; no `liblzf` dependency. |
 | 2     | zstd + byte-transpose + delta | Single zstd blob per frame, untransposed back into TOF and intensity streams, then delta-decoded. |
 
 For the exact byte layout and the LZF implementation specifics, see

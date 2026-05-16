@@ -1,6 +1,6 @@
-# Bruker TDF Format - Overview
+# TDF Format - Overview
 
-The Bruker timsTOF acquisition writes a directory with the extension
+The timsTOF (TDF) acquisition writes a directory with the extension
 `.d/` containing a small, well-defined set of files. The
 authoritative index is an embedded SQLite database; the bulk peak
 data lives in a flat companion stream.
@@ -30,7 +30,7 @@ block index lives in the SQLite database.
 ## Status
 
 This specification was developed by binary analysis of a 64-bundle
-probe corpus spanning Bruker timsTOF schema versions 3.1 through 3.7
+probe corpus spanning TDF schema versions 3.1 through 3.7
 and supplemented with the OpenSource reference implementations
 listed in [06-references-and-gaps.md](06-references-and-gaps.md).
 

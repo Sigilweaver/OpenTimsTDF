@@ -1,9 +1,10 @@
 # Calibration
 
-The Bruker SDK exposes proprietary polynomial models that are not
-publicly documented. `opentdf` ships open-source linear-in-sqrt(m/z)
-and linear-in-scan models that are sufficient for typical analyses
-(< 2 ppm m/z error when calibrated from `CalibrationInfo`).
+`MzCalibration` and `TimsCalibration` hold proprietary polynomial
+models that are not publicly documented. OpenTDF instead implements
+open-source linear-in-sqrt(m/z) and linear-in-scan models that are
+sufficient for typical analyses (< 2 ppm m/z error when calibrated
+from `CalibrationInfo`).
 
 ## TOF -> m/z (boundary variant)
 
@@ -27,15 +28,11 @@ mz(tof) = (intercept + slope * tof)^2
 
 The inverse is `tof(mz) = (sqrt(mz) - intercept) / slope`.
 
-**Not** the Bruker-proprietary polynomial stored in `MzCalibration`.
+**Not** the proprietary polynomial stored in `MzCalibration`.
 The 13-column coefficient table holds everything needed for a
-closed-form evaluation, but Bruker has not published the formula
-and no open-source implementation is known. The `rustims` project
-(MIT, theGreatHerrLebert/rustims) delegates to the vendor SDK DLL
-(`tims_index_to_mz`) for proprietary-grade accuracy; its
-"SDK-free" path (`LinearFrameConverter`) uses the same linear
-model documented above. Consumers that need vendor-grade accuracy
-must use the Bruker SDK.
+closed-form evaluation, but the formula is not publicly documented
+and no open-source implementation is known. Consumers that need to
+reproduce the proprietary calibration must use the vendor toolchain.
 
 **Verified** (`calibration_ranges_match_metadata`): for the
 PXD027359 bundle, `tof_to_mz(0) = 100.0` to within 1e-6 and
@@ -71,7 +68,7 @@ be used only as a fallback when `CalibrationInfo` is absent.
 | `T1` | linear slope in units of 100 ns / sqrt(Da). `t_ns / 100 ~= T1 * sqrt(mz) + T2`. Matches fitted slope to within 0.4%. |
 | `T2` | nominal (pre-calibration) intercept in the same unit system. |
 | `C0` | fitted flight-time zero offset in nanoseconds when C2 = C4 = 0. |
-| `C1 - C4` | polynomial correction coefficients for the Bruker DLL path (ModelType=1); not needed for the open-source linear formula. |
+| `C1 - C4` | polynomial correction coefficients for the proprietary `ModelType=1` evaluation; not needed for the open-source linear formula. |
 
 ## Scan -> 1/K0 (linear)
 
@@ -91,12 +88,11 @@ one_over_k0(scan) = intercept + slope * scan
 
 Inverse: `scan(1/K0) = (1/K0 - intercept) / slope`.
 
-`TimsCalibration(C0 .. C9)` holds the Bruker-proprietary polynomial.
+`TimsCalibration(C0 .. C9)` holds a proprietary polynomial.
 `ModelType = 2` uses a 10-coefficient rational model; `C0 = 1` acts
 as a polarity / offset flag and `C1` is close to `MAX(NumScans) - 1`.
-The evaluation formula is not published. `rustims` delegates to
-`tims_scannum_to_oneoverk0` from the Bruker SDK DLL for
-vendor-grade accuracy and falls back to the linear model otherwise.
+The evaluation formula is not publicly documented. OpenTDF uses the
+linear model documented above.
 
 **Verified** (`calibration_ranges_match_metadata`):
 `scan_to_inv_mobility(0) = 1.6` and

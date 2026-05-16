@@ -11,8 +11,7 @@
 - **rustims** - https://github.com/theGreatHerrLebert/rustims (MIT).
   `rustdf/src/data/handle.rs` `LinearFrameConverter` uses the same
   linear model documented in [04-calibration.md](04-calibration.md).
-  Proprietary calibration delegates to the Bruker SDK DLL.
-- **Bruker documentation** - the publicly distributed PaSER schema
+- **Public format references** - the publicly distributed PaSER schema
   reference is consistent with what we observe on the
   `DiaFrameMsMs*` / `PasefFrameMsMsInfo` tables.
 
@@ -29,26 +28,27 @@ format and acquisition modality (MALDI vs ESI / nanoESI). The
 `opentdf` crate targets `.tdf` (ESI / nanoESI timsTOF) only. A
 separate crate (e.g. `opentsf`) would be the appropriate scope.
 
-### Proprietary Bruker polynomial models
+### Proprietary polynomial models
 
-**`MzCalibration` polynomial (ModelType=1).** The Bruker DLL uses
-coefficients `C1 - C4` stored in `CalibrationInfo` for a non-linear
-TOF -> m/z mapping. These coefficients are visible in the open
-database but the functional form is not public. The open-source
-linear approximation achieves < 2 ppm for typical acquisitions
-(see [04-calibration.md](04-calibration.md#tof---mz-regressed-variant)).
+**`MzCalibration` polynomial (ModelType=1).** A proprietary non-linear
+TOF -> m/z mapping uses coefficients `C1 - C4` stored in
+`CalibrationInfo`. These coefficients are visible in the open
+database but the functional form is not publicly documented. The
+open-source linear approximation achieves < 2 ppm for typical
+acquisitions (see
+[04-calibration.md](04-calibration.md#tof---mz-regressed-variant)).
 
-**`TimsCalibration` voltage polynomial (ModelType=2).** The DLL uses
-10 coefficients stored in `CalibrationInfo` blobs
+**`TimsCalibration` voltage polynomial (ModelType=2).** A proprietary
+model uses 10 coefficients stored in `CalibrationInfo` blobs
 (`MeasuredTimsVoltages`, `MeasuredTimsCurrents`) to map voltage to
-scan index. The functional form is not public. The open-source
-linear approximation is sufficient for all analyses not requiring
-sub-scan-index 1/K0 accuracy.
+scan index. The functional form is not publicly documented. The
+open-source linear approximation is sufficient for all analyses not
+requiring sub-scan-index 1/K0 accuracy.
 
-Implementing these would require reverse-engineering the Bruker DLL,
-which is an explicit non-goal. The path forward is to find published
-`(tof_index, mz)` or `(scan_index, 1/K0)` pairs from open literature
-or open datasets and fit the 13 or 10 coefficient model directly.
+Implementing the proprietary models is an explicit non-goal. The path
+forward is to find published `(tof_index, mz)` or `(scan_index, 1/K0)`
+pairs from open literature or open datasets and fit the 13 or 10
+coefficient model directly.
 
 ### Multi-segment calibration (schema only, hypothetical)
 
@@ -68,7 +68,7 @@ row applies. The open-source linear approximation reads only
 `GlobalMetadata` acquisition-range keys
 (`MzAcqRangeLower`, `MzAcqRangeUpper`), which are single values for
 the whole acquisition. Per-polarity differentiation would require
-the Bruker polynomial model, which is unavailable in the open
+the proprietary polynomial model, which is unavailable in the open
 schema. A multi-polarity sv=3.3 bundle was observed in the probe
 corpus; the parser reads it correctly, but only the calibration
 accuracy for the non-primary polarity is affected by this
@@ -79,5 +79,5 @@ limitation.
 `CollisionEnergySweepingInfo` is present in all sv >= 3.7 bundles by
 schema but never populated in any of the 81 probe / public bundles
 checked. No populated example has been found in any public dataset;
-the feature may be used only in Bruker-internal validation runs or
-future instrument modes not yet publicly released.
+the feature may be used only in instrument-internal validation runs
+or future modes not yet publicly released.

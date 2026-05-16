@@ -4,11 +4,9 @@ sidebar_position: 2
 
 # Calibration
 
-OpenTDF ships an open-source calibration model. Vendor software uses a
-proprietary calibration; OpenTDF instead uses the linear-in-sqrt(m/z)
-model used by [opentims](https://github.com/michalsta/opentims) and
-[rustims](https://github.com/theGreatHerrLebert/rustims), which agrees
-with the vendor calibration to under 2 ppm on the validation corpus.
+OpenTDF uses the linear-in-sqrt(m/z) calibration model from the
+[opentims](https://github.com/michalsta/opentims) and
+[rustims](https://github.com/theGreatHerrLebert/rustims) projects.
 
 ## API
 

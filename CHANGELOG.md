@@ -10,16 +10,15 @@ Initial public release.
 
 ### Added
 
-- Pure-Rust reader for Bruker timsTOF `.d/` (TDF) bundles, with no
-  dependency on the vendor SDK.
+- Rust reader for timsTOF `.d/` (TDF) bundles.
 - SQLite metadata access via bundled `rusqlite`: `GlobalMetadata`,
   `Frames`, mode-specific index tables, and calibration tables.
 - Binary frame decoder supporting both compression codecs:
   - Codec 2 (`TimsCompressionType = 2`): zstd + byte-transpose + delta.
   - Codec 1 (`TimsCompressionType = 1`): per-scan LZF blobs with
-    signed-delta TOF stream (pure-Rust LZF; no `liblzf` dependency).
-- TOF -> m/z and scan -> 1/K0 calibration via the open-source
-  linear-in-sqrt(m/z) model (< 2 ppm against vendor on the probe corpus).
+    signed-delta TOF stream (Rust LZF decoder; no `liblzf` dependency).
+- TOF -> m/z and scan -> 1/K0 calibration via the
+  linear-in-sqrt(m/z) model.
 - Acquisition-mode metadata:
   - diaPASEF windows (`DiaFrameMsMsInfo` + `DiaFrameMsMsWindows`)
   - PASEF DDA precursors + per-frame MS/MS info
@@ -34,5 +33,5 @@ Initial public release.
 
 - `analysis.tsf` (MALDI / non-TIMS bundles).
 - Tune-method XML blocks under `*.m/`.
-- Proprietary Bruker polynomial calibration models (the linear model is
+- Proprietary polynomial calibration models (the linear model is
   used; see `docs/format/04-tof-to-mz-calibration.md`).

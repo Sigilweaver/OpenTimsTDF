@@ -4,9 +4,11 @@ sidebar_position: 2
 
 # Install
 
-OpenTDF is published on [crates.io](https://crates.io/crates/opentdf).
+OpenTDF ships as a Rust crate and a Python package.
 
-## As a library dependency
+## Rust
+
+Published on [crates.io](https://crates.io/crates/opentdf).
 
 ```toml
 # Cargo.toml
@@ -14,7 +16,7 @@ OpenTDF is published on [crates.io](https://crates.io/crates/opentdf).
 opentdf = "0.1"
 ```
 
-## From source
+From source:
 
 ```sh
 git clone https://github.com/Sigilweaver/OpenTDF
@@ -22,21 +24,47 @@ cd OpenTDF
 cargo build --release
 ```
 
-## Requirements
+### Requirements
 
-- Rust 1.75 or later (set as `rust-version` in `Cargo.toml`).
+- Rust 1.75 or later.
 - A C toolchain is required transitively for `rusqlite` (bundled SQLite)
-  and `zstd`. On Linux this is usually `build-essential`; on macOS, Xcode
-  Command Line Tools; on Windows, the MSVC build tools.
+  and `zstd`: `build-essential` on Linux, Xcode Command Line Tools on
+  macOS, or MSVC build tools on Windows.
 
-No Bruker SDK, no `liblzf`, no system SQLite is required: all native
-code is vendored through cargo.
+All native dependencies (SQLite, zstd, LZF) are vendored through cargo.
+
+## Python
+
+Published as [`opentdf`](https://pypi.org/project/opentdf/) on PyPI.
+
+```sh
+pip install opentdf
+```
+
+Built with [PyO3](https://pyo3.rs) and [maturin](https://www.maturin.rs);
+wheels target Python 3.9+.
+
+From source (requires a working Rust toolchain and `maturin`):
+
+```sh
+git clone https://github.com/Sigilweaver/OpenTDF
+cd OpenTDF/python
+maturin develop --release
+```
 
 ## Verifying the install
+
+Rust:
 
 ```sh
 cargo test
 ```
 
-The full suite is nine tests; corpus-gated tests that require local
-Bruker bundles skip silently when data is not present.
+Python:
+
+```sh
+python -c "import opentdf; print(opentdf.__version__)"
+```
+
+Corpus-gated tests that need local `.d/` bundles skip silently when
+no sample data is present.

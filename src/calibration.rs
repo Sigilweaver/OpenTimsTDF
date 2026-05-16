@@ -1,10 +1,10 @@
-/// Open-source linear-in-sqrt TOF↔m/z and linear scan↔1/K₀ calibration,
-/// ported from `opentims++` (`tof2mz_converter.cpp`,
-/// `scan2inv_ion_mobility_converter.cpp`). See SPEC §5 and §6.
+/// Linear-in-sqrt TOF<->m/z and linear scan<->1/K0 calibration, following
+/// the open-source `opentims++` model (`tof2mz_converter.cpp`,
+/// `scan2inv_ion_mobility_converter.cpp`). See SPEC sections 5 and 6.
 ///
-/// These are NOT the Bruker polynomial models; they reproduce opentims'
-/// open-source approximation, which is what downstream consumers get when
-/// they don't link the proprietary Bruker library.
+/// This is NOT the proprietary polynomial model carried in
+/// `MzCalibration` / `TimsCalibration`; it is the open-source linear
+/// approximation, which agrees to under 2 ppm on the validation corpus.
 #[derive(Debug, Clone, Copy)]
 pub struct Calibration {
     /// `sqrt(mz) = mz_intercept + mz_slope * tof`

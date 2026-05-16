@@ -1,0 +1,21 @@
+[package]
+name = "opentdf-py"
+version = "0.1.1"
+edition = "2021"
+rust-version = "1.75"
+description = "Python bindings for OpenTDF."
+authors = ["Nathan Riley <git@nathanriley.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/Sigilweaver/OpenTDF"
+publish = false
+
+[lib]
+name = "opentdf"
+crate-type = ["cdylib"]
+
+[lints.rust]
+unsafe_code = "allow"
+
+[dependencies]
+opentdf = { path = ".." }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }

@@ -4,7 +4,9 @@ sidebar_position: 3
 
 # Quickstart
 
-A minimal end-to-end read of a Bruker `.d/` bundle.
+A minimal end-to-end read of a `.d/` bundle.
+
+## Rust
 
 ```rust
 use opentdf::Reader;
@@ -38,9 +40,9 @@ for frame in reader.frames()? {
 
 ## Acquisition-mode metadata
 
-OpenTDF exposes the windowing tables that Bruker writes for the major
-PASEF acquisition modes. See [Acquisition modes](./guide/acquisition-modes)
-for the full surface area.
+OpenTDF exposes the windowing tables for the major PASEF acquisition
+modes. See [Acquisition modes](./guide/acquisition-modes) for the full
+surface area.
 
 ```rust
 // diaPASEF isolation windows for a given frame
@@ -61,6 +63,30 @@ for entry in reader.prm_msms_info_for_frame(frame.id)? {
         target.external_id, target.monoisotopic_mz, target.charge,
     );
 }
+```
+
+## Python
+
+```python
+import opentdf
+
+reader = opentdf.Reader("my_bundle.d")
+calib = reader.calibration()
+
+frame = reader.frame(1)
+for peak in reader.decode_peaks(frame):
+    mz = calib.tof_to_mz(peak.tof)
+    inv_k0 = calib.scan_to_inv_mobility(peak.scan)
+    print(f"scan={peak.scan:>5} tof={peak.tof:>6} "
+          f"intensity={peak.intensity:>6} mz={mz:.4f} 1/K0={inv_k0:.4f}")
+```
+
+Iterating all frames:
+
+```python
+for frame in reader.frames():
+    peaks = reader.decode_peaks(frame)
+    # ...
 ```
 
 ## CLI example

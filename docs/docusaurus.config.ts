@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'OpenTDF',
-  tagline: 'Pure-Rust parser for Bruker timsTOF .d/ (TDF) bundles',
+  tagline: 'Rust and Python reader for timsTOF .d/ (TDF) bundles',
   favicon: 'img/favicon.ico',
 
   markdown: {
@@ -52,8 +52,8 @@ const config: Config = {
 
   themeConfig: {
     metadata: [
-      { name: 'keywords', content: 'OpenTDF, Bruker, timsTOF, TDF, mass spectrometry, PASEF, diaPASEF, Rust' },
-      { name: 'description', content: 'OpenTDF is a pure-Rust parser for Bruker timsTOF .d/ (TDF) bundles, reverse-engineered without the vendor SDK.' },
+      { name: 'keywords', content: 'OpenTDF, timsTOF, TDF, mass spectrometry, PASEF, diaPASEF, Rust, Python' },
+      { name: 'description', content: 'OpenTDF is a Rust and Python reader for timsTOF .d/ (TDF) bundles.' },
     ],
     colorMode: {
       defaultMode: 'dark',

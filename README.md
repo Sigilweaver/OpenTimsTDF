@@ -2,20 +2,26 @@
 
 [![CI](https://github.com/Sigilweaver/OpenTDF/actions/workflows/ci.yml/badge.svg)](https://github.com/Sigilweaver/OpenTDF/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/opentdf.svg)](https://crates.io/crates/opentdf)
+[![PyPI](https://img.shields.io/pypi/v/opentdf.svg)](https://pypi.org/project/opentdf/)
 [![docs.rs](https://img.shields.io/docsrs/opentdf)](https://docs.rs/opentdf)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Pure-Rust parser for Bruker timsTOF `.d/` (TDF) mass-spectrometry
-bundles, reverse-engineered without the vendor SDK. Runs on Linux,
-macOS, and Windows.
+Rust and Python reader for timsTOF `.d/` (TDF) acquisition bundles -
+the SQLite `analysis.tdf` metadata file and the `analysis.tdf_bin`
+binary frame stream. Runs on Linux, macOS, and Windows.
 
 **Full documentation: [sigilweaver.app/opentdf/docs](https://sigilweaver.app/opentdf/docs)**
 
 ## Install
 
 ```toml
+# Cargo.toml
 [dependencies]
 opentdf = "0.1"
+```
+
+```sh
+pip install opentdf
 ```
 
 ## Quick start
@@ -33,14 +39,24 @@ for peak in reader.decode_peaks(&frame)? {
 }
 ```
 
-More: [Quickstart](https://sigilweaver.app/opentdf/docs/quickstart)
-| [Guide](https://sigilweaver.app/opentdf/docs/guide/reader)
-| [Format spec](https://sigilweaver.app/opentdf/docs/format/overview)
-| [API on docs.rs](https://docs.rs/opentdf).
+```python
+import opentdf
+
+reader = opentdf.Reader("my_bundle.d")
+calib = reader.calibration()
+frame = reader.frame(1)
+for peak in reader.decode_peaks(frame):
+    mz = calib.tof_to_mz(peak.tof)
+    print(peak.scan, mz, peak.intensity)
+```
+
+See [Quickstart](https://sigilweaver.app/opentdf/docs/quickstart),
+[Guide](https://sigilweaver.app/opentdf/docs/guide/reader), and
+[Format specification](https://sigilweaver.app/opentdf/docs/format/overview).
 
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE). Copyright 2026 Sigilweaver Holdings LLC.
 
-Builds on prior open-source reverse-engineering work; see
-[ATTRIBUTION.md](ATTRIBUTION.md).
+The TDF format and codecs were worked out from public sample data
+(PRIDE accessions). See [ATTRIBUTION.md](ATTRIBUTION.md).

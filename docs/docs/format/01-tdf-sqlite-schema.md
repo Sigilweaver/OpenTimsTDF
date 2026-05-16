@@ -2,7 +2,7 @@
 
 The `.tdf` file is an ordinary SQLite3 database (header
 `SQLite format 3\0`). The subset of tables needed to walk the binary
-stream is documented here; the full Bruker schema has many more (for
+stream is documented here; the full schema has many more (for
 calibration curves, MALDI frame layouts, DIA windows, PASEF
 precursors, ...). Mode-specific tables are described in
 [05-instrument-tables.md](05-instrument-tables.md).
@@ -95,7 +95,7 @@ One row per calibration ID. All corpus bundles have at least one row.
 
 ```
 Id                INTEGER  primary key
-ModelType         INTEGER  always 1 (Bruker TOF polynomial model)
+ModelType         INTEGER  always 1 (TOF polynomial model)
 DigitizerTimebase REAL     digitizer sample interval in ns (observed: 0.2)
 DigitizerDelay    REAL     digitizer delay in samples (observed: ~25000-44000)
 T1                REAL     TOF correction coefficient 1
@@ -116,8 +116,7 @@ Sample row (PXD027359, sv=3.5):
 ```
 
 The proprietary evaluation formula for `mz = f(tof, ...)` is not
-published by Bruker and is not implemented by any known open-source
-tool without the vendor DLL. See [04-calibration.md](04-calibration.md)
+implemented by OpenTDF. See [04-calibration.md](04-calibration.md)
 for the open-source fallback.
 
 ### `TimsCalibration`
@@ -126,7 +125,7 @@ One row per calibration ID. `ModelType = 2`.
 
 ```
 Id         INTEGER  primary key
-ModelType  INTEGER  always 2 (Bruker TIMS polynomial model)
+ModelType  INTEGER  always 2 (TIMS polynomial model)
 C0         REAL     1 (polarity flag / scan_offset_A)
 C1         REAL     approx. MAX(NumScans)-1 (scan reference)
 C2 .. C9   REAL     polynomial coefficients
