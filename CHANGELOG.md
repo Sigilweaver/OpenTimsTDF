@@ -4,18 +4,22 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-05-17
 
-### Fixed
-
-- Removed needless borrows in `Reader::open()` calls in integration tests
-  (resolves `clippy::needless_borrows_for_generic_args`).
+First stable release. The public API of `opentdf` is now considered stable
+and will follow semantic versioning. The schema-version compatibility set
+(TDF 3.1, 3.3, 3.5, 3.6, 3.7) is unchanged from 0.1.1.
 
 ### Added
 
 - `publish.yml` GitHub Actions workflow: publishes the `opentdf` crate to
   crates.io and the Python wheel to PyPI via OIDC Trusted Publishing on
   every `v*` tag push.
+
+### Fixed
+
+- Removed needless borrows in `Reader::open()` calls in integration tests
+  (resolves `clippy::needless_borrows_for_generic_args`).
 
 ### Changed
 
