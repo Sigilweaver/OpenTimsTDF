@@ -4,9 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "opentimstdf"
-version = "1.0.2"
+version = "1.0.3"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles"
-readme = "../README.md"
+readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Nathan Riley", email = "git@nathanriley.com" }]
 requires-python = ">=3.8"
