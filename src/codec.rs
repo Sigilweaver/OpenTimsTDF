@@ -152,7 +152,7 @@ pub fn decode_codec1(
     Ok(peaks)
 }
 
-/// Minimal LZF (libLZF) decompressor — streaming, allocation-free beyond
+/// Minimal LZF (libLZF) decompressor - streaming, allocation-free beyond
 /// the `out` vec. Format reference: <http://oldhome.schmorp.de/marc/liblzf.html>.
 pub(crate) fn lzf_decompress(
     input: &[u8],

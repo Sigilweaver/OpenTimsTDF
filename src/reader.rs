@@ -95,7 +95,7 @@ impl Reader {
     /// `DigitizerNumSamples`, `OneOverK0AcqRangeLower/Upper`) to construct the
     /// linear-in-sqrt(m/z) and linear 1/K0 approximation implemented by
     /// `opentims` (BSD-2-Clause). This model is the same for all frames,
-    /// including dual-polarity bundles — per-polarity differentiation requires
+    /// including dual-polarity bundles - per-polarity differentiation requires
     /// the proprietary Bruker polynomial model (SPEC §11 `[open]`).
     ///
     /// `frame.mz_calibration_id` identifies which polarity row a frame belongs

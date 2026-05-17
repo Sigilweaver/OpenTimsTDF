@@ -2,7 +2,7 @@
 
 Bruker `.d` bundles re-distributed (for research / open-parser
 development) from public ProteomeXchange repositories. Every dataset
-listed below retains its original licence — PRIDE's default is
+listed below retains its original licence - PRIDE's default is
 CC-BY 4.0, but per-dataset terms always win. If you use any of
 these data, please cite the original submitter and the ProteomeXchange
 accession; links below resolve to the project landing page.
@@ -34,7 +34,7 @@ Total size: 17.01 GB
 
 ## Per-bundle detail
 
-### PXD021593 — F031470HD.d.zip
+### PXD021593 - F031470HD.d.zip
 
 - Title: A proteomic-informed view of the changes induced by loss of cellular adherence: the example of mouse macrophages
 - Organisms: Mus musculus (mouse)
@@ -49,7 +49,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD021593: A proteomic-informed view of the changes induced by loss of cellular adherence: the example of mouse macrophages
 
-### PXD009101 — 2083-_EDD.d.zip
+### PXD009101 - 2083-_EDD.d.zip
 
 - Title: GAGfinder: glycosaminoglycan MS/MS fragment peak finding and elemental composition assignment
 - Organisms: Homo sapiens (human)
@@ -64,7 +64,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD009101: GAGfinder: glycosaminoglycan MS/MS fragment peak finding and elemental composition assignment
 
-### PXD005859 — SspFlag2_GC3_01_10982.d.zip
+### PXD005859 - SspFlag2_GC3_01_10982.d.zip
 
 - Title: Glycoproteomics of Flagellin C9LY14 from Selenomonas sputigena
 - Organisms: Selenomonas sputigena atcc 35185, Escherichia coli
@@ -79,7 +79,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD005859: Glycoproteomics of Flagellin C9LY14 from Selenomonas sputigena
 
-### PXD030992 — P3945_10_1_1_4638.d.zip
+### PXD030992 - P3945_10_1_1_4638.d.zip
 
 - Title: TGFB1 induced S100 family protein expression is associated with epithelial to mesenchymal transition states and poor survival in pancreatic cancer
 - Organisms: Mus musculus (mouse)
@@ -94,7 +94,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD030992: TGFB1 induced S100 family protein expression is associated with epithelial to mesenchymal transition states and poor survival in pancreatic cancer
 
-### PXD025576 — 191118_DIAMAX_G10_Slot1-62_1_459.d.zip
+### PXD025576 - 191118_DIAMAX_G10_Slot1-62_1_459.d.zip
 
 - Title: Characterizing the role of OCIAD1 in the proteolytic processing of holocytochrome c1 and CIII2 assembly
 - Organisms: Homo sapiens (human)
@@ -109,7 +109,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD025576: Characterizing the role of OCIAD1 in the proteolytic processing of holocytochrome c1 and CIII2 assembly
 
-### PXD031833 — mTTYH1-D_coi-N2-P-200-20C_U-T_3366.d.zip
+### PXD031833 - mTTYH1-D_coi-N2-P-200-20C_U-T_3366.d.zip
 
 - Title: TTYH family members form tetrameric complexes at the cell membrane
 - Organisms: Mus musculus (mouse)
@@ -124,7 +124,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD031833: TTYH family members form tetrameric complexes at the cell membrane
 
-### PXD027359 — 20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d.zip
+### PXD027359 - 20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d.zip
 
 - Title: AlphaTims: Indexing unprocessed trapped ion mobility spectrometry - time of flight data for fast and easy accession and visualization
 - Organisms: Homo sapiens (human)
@@ -139,7 +139,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD027359: AlphaTims: Indexing unprocessed trapped ion mobility spectrometry - time of flight data for fast and easy accession and visualization
 
-### PXD034557 — C1DIA_Slot1-1_1_3174.d.zip
+### PXD034557 - C1DIA_Slot1-1_1_3174.d.zip
 
 - Title: Comparative Proteomic Profiling of Variants SARS-CoV-2 Virus-Like-Particles (VLPs) Incubated Cells
 - Organisms: Homo sapiens (human)
@@ -154,7 +154,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD034557: Comparative Proteomic Profiling of Variants SARS-CoV-2 Virus-Like-Particles (VLPs) Incubated Cells
 
-### PXD006287 — XL2349_fr9_B2_01_1701.d.zip
+### PXD006287 - XL2349_fr9_B2_01_1701.d.zip
 
 - Title: In culture cross-linking of bacterial cells reveals large scale dynamic protein-protein interactions at the peptide level.
 - Organisms: Bacillus subtilis subsp. subtilis str. 168
@@ -169,7 +169,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD006287: In culture cross-linking of bacterial cells reveals large scale dynamic protein-protein interactions at the peptide level.
 
-### PXD009101 — 2064-_NETD.d.zip
+### PXD009101 - 2064-_NETD.d.zip
 
 - Title: GAGfinder: glycosaminoglycan MS/MS fragment peak finding and elemental composition assignment
 - Organisms: Homo sapiens (human)
@@ -184,7 +184,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD009101: GAGfinder: glycosaminoglycan MS/MS fragment peak finding and elemental composition assignment
 
-### PXD018980 — 20170224_122_Gua_ZB4359_BB2_01_383.d.zip
+### PXD018980 - 20170224_122_Gua_ZB4359_BB2_01_383.d.zip
 
 - Title: Characterisation of South American camelid fibres by proteomics
 - Organisms: Camelidae
@@ -199,7 +199,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD018980: Characterisation of South American camelid fibres by proteomics
 
-### PXD036417 — NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+### PXD036417 - NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
 
 - Title: Counterintuitive structural and functional effects due to naturally-occurring mutations targeting the active site of the disease-associated NQO1 enzyme
 - Organisms: Homo sapiens (human)
@@ -214,7 +214,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD036417: Counterintuitive structural and functional effects due to naturally-occurring mutations targeting the active site of the disease-associated NQO1 enzyme
 
-### PXD022216 — fmeierab_T190525_CLL_diaPASEF_02_1977.d.zip
+### PXD022216 - fmeierab_T190525_CLL_diaPASEF_02_1977.d.zip
 
 - Title: The Proteome Landscape of Chronic Lymphocytic Leukemia
 - Organisms: Homo sapiens (human)
@@ -229,7 +229,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD022216: The Proteome Landscape of Chronic Lymphocytic Leukemia
 
-### PXD030327 — EXP21053_2021ms0297X10_A_BB2_1_1884.d.zip
+### PXD030327 - EXP21053_2021ms0297X10_A_BB2_1_1884.d.zip
 
 - Title: Enhanced competition at the nano-bio interface enables comprehensive characterization of protein corona dynamics and deep coverage of proteomes 
 - Organisms: Homo sapiens (human)
@@ -244,7 +244,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD030327: Enhanced competition at the nano-bio interface enables comprehensive characterization of protein corona dynamics and deep coverage of proteomes
 
-### PXD018972 — LA_CS-F_24May16_BE4_01_30183.d.zip
+### PXD018972 - LA_CS-F_24May16_BE4_01_30183.d.zip
 
 - Title: Caspr2 interacts with type 1 inositol 1,4,5-trisphosphate receptor in the developing cerebellum and regulates Purkinje cell morphology
 - Organisms: Mus musculus (mouse)
@@ -259,7 +259,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD018972: Caspr2 interacts with type 1 inositol 1,4,5-trisphosphate receptor in the developing cerebellum and regulates Purkinje cell morphology
 
-### PXD038283 — Ca1.d.zip
+### PXD038283 - Ca1.d.zip
 
 - Title: Robust high throughput proteomics identification and deami-dation quantitation of extinct species up to Pleistocene with Ultrahigh Resolution MALDI-FTICR Mass Spectrometry
 - Organisms: Homo sapiens (human), Bos taurus (bovine), Rhinoceros, Castor fiber (eurasian beaver), Cervus, Equus caballus (horse)
@@ -274,7 +274,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD038283: Robust high throughput proteomics identification and deami-dation quantitation of extinct species up to Pleistocene with Ultrahigh Resolution MALDI-FTICR Mass Spectrometry
 
-### PXD001592 — 025pmolUPS2_500ngY_90min1Hz1pr_BC1_01_338.d.zip
+### PXD001592 - 025pmolUPS2_500ngY_90min1Hz1pr_BC1_01_338.d.zip
 
 - Title: The impact II, a very high resolution quadrupole time-of-flight instrument for deep shotgun proteomics
 - Organisms: Homo sapiens (human), Mus musculus (mouse), Saccharomyces cerevisiae (baker's yeast)
@@ -289,7 +289,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD001592: The impact II, a very high resolution quadrupole time-of-flight instrument for deep shotgun proteomics
 
-### PXD035147 — JD019LPMa_HC_1_Slot1-45_1_10163.d.zip
+### PXD035147 - JD019LPMa_HC_1_Slot1-45_1_10163.d.zip
 
 - Title: Integrated proteome and malonylome analyses reveal the potential meaning of TLN1 and ACTB in end-stage renal disease
 - Organisms: Homo sapiens (human)
@@ -304,7 +304,7 @@ Total size: 17.01 GB
 - Licence (presumed): CC-BY-4.0 (PRIDE default)
 - Attribution string: PRIDE PXD035147: Integrated proteome and malonylome analyses reveal the potential meaning of TLN1 and ACTB in end-stage renal disease
 
-### PXD035173 — 62_Slot1-54_1_2674.d.zip
+### PXD035173 - 62_Slot1-54_1_2674.d.zip
 
 - Title: Proteomic profiling of carotid atherosclerotic plaques and adjacent intact arterial segments
 - Organisms: Homo sapiens (human)
