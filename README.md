@@ -61,7 +61,7 @@ full quickstart, guide, and format specification.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE). Copyright 2026 Sigilweaver Holdings LLC.
+Apache-2.0. See [LICENSE](LICENSE).
 
 The TDF format and codecs were worked out from public sample data
 (PRIDE accessions). See [ATTRIBUTION.md](ATTRIBUTION.md).
