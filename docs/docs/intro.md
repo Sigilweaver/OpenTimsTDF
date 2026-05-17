@@ -3,16 +3,16 @@ sidebar_position: 1
 slug: /
 ---
 
-# OpenTDF
+# OpenTimsTDF
 
-OpenTDF is a Rust library that reads timsTOF `.d/` (TDF) acquisition
+OpenTimsTDF is a Rust library that reads timsTOF `.d/` (TDF) acquisition
 bundles - the SQLite `analysis.tdf` metadata file and the
 `analysis.tdf_bin` binary frame stream. The format and codecs were
 worked out from public sample data (PRIDE accessions); no proprietary
 SDK or vendor source was consulted.
 
-OpenTDF runs on Linux, macOS, and Windows, with optional Python
-bindings via [`opentdf-py`](./install).
+OpenTimsTDF runs on Linux, macOS, and Windows, with optional Python
+bindings via [`opentimstdf-py`](./install).
 
 ## What it covers
 
@@ -35,8 +35,8 @@ bindings via [`opentdf-py`](./install).
 - Run through the [Quickstart](./quickstart).
 - Read the [Format specification](./format/overview) for the binary
   layer.
-- Browse the API on [docs.rs](https://docs.rs/opentdf).
+- Browse the API on [docs.rs](https://docs.rs/opentimstdf).
 
 ## License
 
-OpenTDF is Apache-2.0 licensed. See [License](./license).
+OpenTimsTDF is Apache-2.0 licensed. See [License](./license).

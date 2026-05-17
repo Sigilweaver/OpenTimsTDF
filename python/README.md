@@ -1,16 +1,16 @@
-# opentdf (Python bindings)
+# opentimstdf (Python bindings)
 
-Python bindings for the [OpenTDF](https://github.com/Sigilweaver/OpenTDF)
+Python bindings for the [OpenTimsTDF](https://github.com/Sigilweaver/OpenTimsTDF)
 Rust crate.
 
 ```sh
-pip install opentdf
+pip install opentimstdf
 ```
 
 ```python
-import opentdf
+import opentimstdf
 
-reader = opentdf.Reader("my_bundle.d")
+reader = opentimstdf.Reader("my_bundle.d")
 calib = reader.calibration()
 frame = reader.frame(1)
 for peak in reader.decode_peaks(frame):
@@ -18,7 +18,7 @@ for peak in reader.decode_peaks(frame):
     print(peak.scan, mz, peak.intensity)
 ```
 
-See the [docs site](https://sigilweaver.app/opentdf/docs) for the full API.
+See the [docs site](https://sigilweaver.app/opentimstdf/docs) for the full API.
 
 ## Build from source
 

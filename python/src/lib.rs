@@ -1,6 +1,6 @@
-//! Python bindings for OpenTDF.
+//! Python bindings for OpenTimsTDF.
 //!
-//! Exposes `opentdf.Reader`, which opens a `.d/` (TDF) bundle once and
+//! Exposes `opentimstdf.Reader`, which opens a `.d/` (TDF) bundle once and
 //! serves per-frame metadata, calibration, and decoded peaks.
 
 use std::path::PathBuf;
@@ -9,20 +9,20 @@ use std::sync::Mutex;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use ::opentdf::{
+use ::opentimstdf::{
     Calibration as RsCalibration, DiaFrameWindows as RsDiaFrameWindows, DiaWindow as RsDiaWindow,
     Frame as RsFrame, Metadata as RsMetadata, PasefMsMsInfo as RsPasefMsMsInfo, Peak as RsPeak,
     Precursor as RsPrecursor, PrmMsMsInfo as RsPrmMsMsInfo, PrmTarget as RsPrmTarget,
     Reader as RsReader,
 };
 
-fn to_py_err(e: ::opentdf::Error) -> PyErr {
+fn to_py_err(e: ::opentimstdf::Error) -> PyErr {
     PyRuntimeError::new_err(format!("{e}"))
 }
 
 // -- Peak --------------------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "Peak")]
+#[pyclass(module = "opentimstdf", name = "Peak")]
 #[derive(Clone, Copy)]
 struct Peak {
     #[pyo3(get)]
@@ -55,7 +55,7 @@ impl From<RsPeak> for Peak {
 
 // -- Frame -------------------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "Frame")]
+#[pyclass(module = "opentimstdf", name = "Frame")]
 #[derive(Clone)]
 struct Frame {
     #[pyo3(get)]
@@ -109,7 +109,7 @@ impl From<RsFrame> for Frame {
 
 // -- Metadata ----------------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "Metadata")]
+#[pyclass(module = "opentimstdf", name = "Metadata")]
 #[derive(Clone)]
 struct Metadata {
     #[pyo3(get)]
@@ -156,7 +156,7 @@ impl From<RsMetadata> for Metadata {
 
 // -- Calibration -------------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "Calibration")]
+#[pyclass(module = "opentimstdf", name = "Calibration")]
 #[derive(Clone, Copy)]
 struct Calibration {
     inner: RsCalibration,
@@ -213,7 +213,7 @@ impl Calibration {
 
 // -- DiaWindow / DiaFrameWindows --------------------------------------------
 
-#[pyclass(module = "opentdf", name = "DiaWindow")]
+#[pyclass(module = "opentimstdf", name = "DiaWindow")]
 #[derive(Clone)]
 struct DiaWindow {
     #[pyo3(get)]
@@ -243,7 +243,7 @@ impl From<RsDiaWindow> for DiaWindow {
     }
 }
 
-#[pyclass(module = "opentdf", name = "DiaFrameWindows")]
+#[pyclass(module = "opentimstdf", name = "DiaFrameWindows")]
 #[derive(Clone)]
 struct DiaFrameWindows {
     #[pyo3(get)]
@@ -266,7 +266,7 @@ impl From<RsDiaFrameWindows> for DiaFrameWindows {
 
 // -- PasefMsMsInfo -----------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "PasefMsMsInfo")]
+#[pyclass(module = "opentimstdf", name = "PasefMsMsInfo")]
 #[derive(Clone)]
 struct PasefMsMsInfo {
     #[pyo3(get)]
@@ -301,7 +301,7 @@ impl From<RsPasefMsMsInfo> for PasefMsMsInfo {
 
 // -- PrmMsMsInfo / PrmTarget -------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "PrmMsMsInfo")]
+#[pyclass(module = "opentimstdf", name = "PrmMsMsInfo")]
 #[derive(Clone)]
 struct PrmMsMsInfo {
     #[pyo3(get)]
@@ -334,7 +334,7 @@ impl From<RsPrmMsMsInfo> for PrmMsMsInfo {
     }
 }
 
-#[pyclass(module = "opentdf", name = "PrmTarget")]
+#[pyclass(module = "opentimstdf", name = "PrmTarget")]
 #[derive(Clone)]
 struct PrmTarget {
     #[pyo3(get)]
@@ -369,7 +369,7 @@ impl From<RsPrmTarget> for PrmTarget {
 
 // -- Precursor ---------------------------------------------------------------
 
-#[pyclass(module = "opentdf", name = "Precursor")]
+#[pyclass(module = "opentimstdf", name = "Precursor")]
 #[derive(Clone)]
 struct Precursor {
     #[pyo3(get)]
@@ -413,7 +413,7 @@ impl From<RsPrecursor> for Precursor {
 /// ----------
 /// path : str
 ///     Path to the `.d/` directory.
-#[pyclass(module = "opentdf", name = "Reader")]
+#[pyclass(module = "opentimstdf", name = "Reader")]
 struct Reader {
     inner: Mutex<RsReader>,
     bundle_dir: PathBuf,
@@ -569,7 +569,7 @@ impl Reader {
 // -- Module ------------------------------------------------------------------
 
 #[pymodule]
-fn opentdf(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn opentimstdf(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<Reader>()?;
     m.add_class::<Calibration>()?;

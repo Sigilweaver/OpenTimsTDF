@@ -6,13 +6,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.0.0] - 2026-05-17
 
-First stable release. The public API of `opentdf` is now considered stable
-and will follow semantic versioning. The schema-version compatibility set
-(TDF 3.1, 3.3, 3.5, 3.6, 3.7) is unchanged from 0.1.1.
+First stable release under the new name `opentimstdf` (renamed from
+`opentdf` to avoid collision with the unrelated OpenTDF organization on
+GitHub and the Trusted Data Format ecosystem). The public API of
+`opentimstdf` is now considered stable and will follow semantic
+versioning. The schema-version compatibility set (TDF 3.1, 3.3, 3.5,
+3.6, 3.7) is unchanged from `opentdf` 0.1.1.
+
+The crate, Python package, and GitHub repository have all been renamed:
+
+- crates.io: `opentdf` -> `opentimstdf`
+- PyPI: `opentdf` -> `opentimstdf`
+- GitHub: `Sigilweaver/OpenTDF` -> `Sigilweaver/OpenTimsTDF`
+- Python module: `import opentdf` -> `import opentimstdf`
+- Rust crate: `use opentdf::Reader` -> `use opentimstdf::Reader`
 
 ### Added
 
-- `publish.yml` GitHub Actions workflow: publishes the `opentdf` crate to
+- `publish.yml` GitHub Actions workflow: publishes the `opentimstdf` crate to
   crates.io and the Python wheel to PyPI via OIDC Trusted Publishing on
   every `v*` tag push.
 

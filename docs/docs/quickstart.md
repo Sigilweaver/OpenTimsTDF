@@ -9,9 +9,9 @@ A minimal end-to-end read of a `.d/` bundle.
 ## Rust
 
 ```rust
-use opentdf::Reader;
+use opentimstdf::Reader;
 
-fn main() -> opentdf::Result<()> {
+fn main() -> opentimstdf::Result<()> {
     let reader = Reader::open("my_bundle.d")?;
     let calib = reader.calibration()?;
 
@@ -40,7 +40,7 @@ for frame in reader.frames()? {
 
 ## Acquisition-mode metadata
 
-OpenTDF exposes the windowing tables for the major PASEF acquisition
+OpenTimsTDF exposes the windowing tables for the major PASEF acquisition
 modes. See [Acquisition modes](./guide/acquisition-modes) for the full
 surface area.
 
@@ -68,9 +68,9 @@ for entry in reader.prm_msms_info_for_frame(frame.id)? {
 ## Python
 
 ```python
-import opentdf
+import opentimstdf
 
-reader = opentdf.Reader("my_bundle.d")
+reader = opentimstdf.Reader("my_bundle.d")
 calib = reader.calibration()
 
 frame = reader.frame(1)

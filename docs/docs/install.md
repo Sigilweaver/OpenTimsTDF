@@ -4,23 +4,23 @@ sidebar_position: 2
 
 # Install
 
-OpenTDF ships as a Rust crate and a Python package.
+OpenTimsTDF ships as a Rust crate and a Python package.
 
 ## Rust
 
-Published on [crates.io](https://crates.io/crates/opentdf).
+Published on [crates.io](https://crates.io/crates/opentimstdf).
 
 ```toml
 # Cargo.toml
 [dependencies]
-opentdf = "0.1"
+opentimstdf = "0.1"
 ```
 
 From source:
 
 ```sh
-git clone https://github.com/Sigilweaver/OpenTDF
-cd OpenTDF
+git clone https://github.com/Sigilweaver/OpenTimsTDF
+cd OpenTimsTDF
 cargo build --release
 ```
 
@@ -35,10 +35,10 @@ All native dependencies (SQLite, zstd, LZF) are vendored through cargo.
 
 ## Python
 
-Published as [`opentdf`](https://pypi.org/project/opentdf/) on PyPI.
+Published as [`opentimstdf`](https://pypi.org/project/opentimstdf/) on PyPI.
 
 ```sh
-pip install opentdf
+pip install opentimstdf
 ```
 
 Built with [PyO3](https://pyo3.rs) and [maturin](https://www.maturin.rs);
@@ -47,8 +47,8 @@ wheels target Python 3.9+.
 From source (requires a working Rust toolchain and `maturin`):
 
 ```sh
-git clone https://github.com/Sigilweaver/OpenTDF
-cd OpenTDF/python
+git clone https://github.com/Sigilweaver/OpenTimsTDF
+cd OpenTimsTDF/python
 maturin develop --release
 ```
 
@@ -63,7 +63,7 @@ cargo test
 Python:
 
 ```sh
-python -c "import opentdf; print(opentdf.__version__)"
+python -c "import opentimstdf; print(opentimstdf.__version__)"
 ```
 
 Corpus-gated tests that need local `.d/` bundles skip silently when

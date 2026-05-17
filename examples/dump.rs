@@ -14,7 +14,7 @@ fn main() -> ExitCode {
     let bundle = &args[1];
     let frame_id: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
 
-    let reader = match opentdf::Reader::open(bundle) {
+    let reader = match opentimstdf::Reader::open(bundle) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("open failed: {e}");

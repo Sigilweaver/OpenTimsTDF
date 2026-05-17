@@ -116,7 +116,7 @@ Sample row (PXD027359, sv=3.5):
 ```
 
 The proprietary evaluation formula for `mz = f(tof, ...)` is not
-implemented by OpenTDF. See [04-calibration.md](04-calibration.md)
+implemented by OpenTimsTDF. See [04-calibration.md](04-calibration.md)
 for the open-source fallback.
 
 ### `TimsCalibration`

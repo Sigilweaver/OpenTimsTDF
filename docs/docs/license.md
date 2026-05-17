@@ -4,18 +4,18 @@ sidebar_position: 99
 
 # License
 
-OpenTDF is licensed under the **Apache License, Version 2.0**.
+OpenTimsTDF is licensed under the **Apache License, Version 2.0**.
 
-- [LICENSE](https://github.com/Sigilweaver/OpenTDF/blob/main/LICENSE)
+- [LICENSE](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/LICENSE)
 - [Apache-2.0 (spdx.org)](https://spdx.org/licenses/Apache-2.0.html)
 
 Copyright 2026 Sigilweaver Holdings LLC.
 
 ## Third-party attribution
 
-OpenTDF builds on prior open-source work; the TDF format and codecs
+OpenTimsTDF builds on prior open-source work; the TDF format and codecs
 were worked out from public sample data (PRIDE accessions). See
-[ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTDF/blob/main/ATTRIBUTION.md)
+[ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/ATTRIBUTION.md)
 in the repository for the full list.
 
 ## Documentation licence

@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Calibration
 
-OpenTDF uses the linear-in-sqrt(m/z) calibration model from the
+OpenTimsTDF uses the linear-in-sqrt(m/z) calibration model from the
 [opentims](https://github.com/michalsta/opentims) and
 [rustims](https://github.com/theGreatHerrLebert/rustims) projects.
 

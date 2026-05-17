@@ -25,7 +25,7 @@ position rather than retention time, there is no scan (1/K0)
 dimension, and the binary data layout is different. Supporting
 `.tsf` would require a parallel implementation targeting a distinct
 format and acquisition modality (MALDI vs ESI / nanoESI). The
-`opentdf` crate targets `.tdf` (ESI / nanoESI timsTOF) only. A
+`opentimstdf` crate targets `.tdf` (ESI / nanoESI timsTOF) only. A
 separate crate (e.g. `opentsf`) would be the appropriate scope.
 
 ### Proprietary polynomial models

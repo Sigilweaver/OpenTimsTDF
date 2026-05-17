@@ -1,13 +1,13 @@
 [package]
-name = "opentdf"
+name = "opentimstdf"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles."
 authors = ["Nathan Riley <git@nathanriley.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/Sigilweaver/OpenTDF"
-homepage = "https://github.com/Sigilweaver/OpenTDF"
+repository = "https://github.com/Sigilweaver/OpenTimsTDF"
+homepage = "https://github.com/Sigilweaver/OpenTimsTDF"
 readme = "README.md"
 keywords = ["mass-spectrometry", "bruker", "timstof", "tdf", "proteomics"]
 categories = ["parser-implementations", "science"]

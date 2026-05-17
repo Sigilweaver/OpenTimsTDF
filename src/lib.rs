@@ -1,4 +1,4 @@
-//! OpenTDF - Rust reader for timsTOF `.d/` (TDF) mass spectrometry bundles.
+//! OpenTimsTDF - Rust reader for timsTOF `.d/` (TDF) mass spectrometry bundles.
 //!
 //! The format and codecs are documented in `re/SPEC.md` (and mirrored on
 //! the docs site). Both compression codecs are supported:

@@ -7,7 +7,7 @@ sidebar_position: 1
 The canonical API reference is published on docs.rs for every released
 version:
 
-- [docs.rs/opentdf](https://docs.rs/opentdf)
-- [docs.rs/opentdf/latest/opentdf/struct.Reader.html](https://docs.rs/opentdf/latest/opentdf/struct.Reader.html)
+- [docs.rs/opentimstdf](https://docs.rs/opentimstdf)
+- [docs.rs/opentimstdf/latest/opentimstdf/struct.Reader.html](https://docs.rs/opentimstdf/latest/opentimstdf/struct.Reader.html)
 
 For a guided tour of the API surface, see the [Reader guide](../guide/reader).

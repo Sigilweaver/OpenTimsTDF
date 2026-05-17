@@ -6,8 +6,8 @@ sidebar_position: 90
 
 The authoritative changelog lives in the repository:
 
-- [CHANGELOG.md on GitHub](https://github.com/Sigilweaver/OpenTDF/blob/main/CHANGELOG.md)
-- [Releases](https://github.com/Sigilweaver/OpenTDF/releases)
+- [CHANGELOG.md on GitHub](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/CHANGELOG.md)
+- [Releases](https://github.com/Sigilweaver/OpenTimsTDF/releases)
 
 ## Current release
 
@@ -23,5 +23,5 @@ Initial public release. Covers:
 - diaPASEF, PASEF DDA, and prm-PASEF metadata helpers.
 - Schema versions 3.1, 3.3, 3.5, 3.6, 3.7.
 
-See [CHANGELOG.md](https://github.com/Sigilweaver/OpenTDF/blob/main/CHANGELOG.md)
+See [CHANGELOG.md](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/CHANGELOG.md)
 for the full entry.

@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "opentdf"
+name = "opentimstdf"
 version = "1.0.0"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles"
 readme = "README.md"
@@ -18,12 +18,12 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Sigilweaver/OpenTDF"
-Documentation = "https://sigilweaver.app/opentdf/docs"
-Source = "https://github.com/Sigilweaver/OpenTDF"
-Changelog = "https://github.com/Sigilweaver/OpenTDF/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Sigilweaver/OpenTimsTDF"
+Documentation = "https://sigilweaver.app/opentimstdf/docs"
+Source = "https://github.com/Sigilweaver/OpenTimsTDF"
+Changelog = "https://github.com/Sigilweaver/OpenTimsTDF/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "opentdf"
+module-name = "opentimstdf"
 manifest-path = "Cargo.toml"

@@ -1,33 +1,37 @@
-# OpenTDF
+# OpenTimsTDF
 
-[![CI](https://github.com/Sigilweaver/OpenTDF/actions/workflows/ci.yml/badge.svg)](https://github.com/Sigilweaver/OpenTDF/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/opentdf.svg)](https://crates.io/crates/opentdf)
-[![PyPI](https://img.shields.io/pypi/v/opentdf.svg)](https://pypi.org/project/opentdf/)
-[![docs.rs](https://img.shields.io/docsrs/opentdf)](https://docs.rs/opentdf)
+[![CI](https://github.com/Sigilweaver/OpenTimsTDF/actions/workflows/ci.yml/badge.svg)](https://github.com/Sigilweaver/OpenTimsTDF/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/opentimstdf.svg)](https://crates.io/crates/opentimstdf)
+[![PyPI](https://img.shields.io/pypi/v/opentimstdf.svg)](https://pypi.org/project/opentimstdf/)
+[![docs.rs](https://img.shields.io/docsrs/opentimstdf)](https://docs.rs/opentimstdf)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 Rust and Python reader for timsTOF `.d/` (TDF) acquisition bundles -
 the SQLite `analysis.tdf` metadata file and the `analysis.tdf_bin`
 binary frame stream. Runs on Linux, macOS, and Windows.
 
-**Full documentation: [sigilweaver.app/opentdf/docs](https://sigilweaver.app/opentdf/docs)**
+Documentation: [sigilweaver.app/opentimstdf/docs](https://sigilweaver.app/opentimstdf/docs)
 
 ## Install
 
-```toml
-# Cargo.toml
-[dependencies]
-opentdf = "0.1"
-```
+Rust:
 
 ```sh
-pip install opentdf
+cargo add opentimstdf
 ```
 
-## Quick start
+Python:
+
+```sh
+pip install opentimstdf
+```
+
+## Quickstart
+
+Rust:
 
 ```rust
-use opentdf::Reader;
+use opentimstdf::Reader;
 
 let reader = Reader::open("my_bundle.d")?;
 let calib = reader.calibration()?;
@@ -39,10 +43,12 @@ for peak in reader.decode_peaks(&frame)? {
 }
 ```
 
-```python
-import opentdf
+Python:
 
-reader = opentdf.Reader("my_bundle.d")
+```python
+import opentimstdf
+
+reader = opentimstdf.Reader("my_bundle.d")
 calib = reader.calibration()
 frame = reader.frame(1)
 for peak in reader.decode_peaks(frame):
@@ -50,9 +56,8 @@ for peak in reader.decode_peaks(frame):
     print(peak.scan, mz, peak.intensity)
 ```
 
-See [Quickstart](https://sigilweaver.app/opentdf/docs/quickstart),
-[Guide](https://sigilweaver.app/opentdf/docs/guide/reader), and
-[Format specification](https://sigilweaver.app/opentdf/docs/format/overview).
+See the [docs site](https://sigilweaver.app/opentimstdf/docs) for the
+full quickstart, guide, and format specification.
 
 ## License
 

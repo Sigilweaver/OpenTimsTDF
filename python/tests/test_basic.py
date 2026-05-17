@@ -1,4 +1,4 @@
-"""Smoke tests for the opentdf Python bindings.
+"""Smoke tests for the opentimstdf Python bindings.
 
 These exercise the import surface and run against a `.d/` bundle if one is
 available via the `OPENTDF_TEST_BUNDLE` env var. Without a bundle, only the
@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import os
 
-import opentdf
+import opentimstdf
 
 
 def test_version() -> None:
-    assert isinstance(opentdf.__version__, str)
-    assert opentdf.__version__.count(".") >= 1
+    assert isinstance(opentimstdf.__version__, str)
+    assert opentimstdf.__version__.count(".") >= 1
 
 
 def test_classes_present() -> None:
@@ -31,7 +31,7 @@ def test_classes_present() -> None:
         "PrmTarget",
         "Precursor",
     ]:
-        assert hasattr(opentdf, name), f"missing class: {name}"
+        assert hasattr(opentimstdf, name), f"missing class: {name}"
 
 
 def test_bundle_roundtrip() -> None:
@@ -39,7 +39,7 @@ def test_bundle_roundtrip() -> None:
     if not bundle:
         return
 
-    reader = opentdf.Reader(bundle)
+    reader = opentimstdf.Reader(bundle)
     meta = reader.metadata()
     assert meta.schema_version_major >= 0
 

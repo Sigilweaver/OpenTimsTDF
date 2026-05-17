@@ -1,7 +1,7 @@
 # Calibration
 
 `MzCalibration` and `TimsCalibration` hold proprietary polynomial
-models that are not publicly documented. OpenTDF instead implements
+models that are not publicly documented. OpenTimsTDF instead implements
 open-source linear-in-sqrt(m/z) and linear-in-scan models that are
 sufficient for typical analyses (< 2 ppm m/z error when calibrated
 from `CalibrationInfo`).
@@ -91,7 +91,7 @@ Inverse: `scan(1/K0) = (1/K0 - intercept) / slope`.
 `TimsCalibration(C0 .. C9)` holds a proprietary polynomial.
 `ModelType = 2` uses a 10-coefficient rational model; `C0 = 1` acts
 as a polarity / offset flag and `C1` is close to `MAX(NumScans) - 1`.
-The evaluation formula is not publicly documented. OpenTDF uses the
+The evaluation formula is not publicly documented. OpenTimsTDF uses the
 linear model documented above.
 
 **Verified** (`calibration_ranges_match_metadata`):

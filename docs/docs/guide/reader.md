@@ -4,14 +4,14 @@ sidebar_position: 1
 
 # Reader
 
-`opentdf::Reader` is the entry point. Opening a bundle parses the
+`opentimstdf::Reader` is the entry point. Opening a bundle parses the
 `GlobalMetadata` table, validates the schema version, and prepares
 SQLite statements for repeated frame access.
 
 ## Opening a bundle
 
 ```rust
-use opentdf::Reader;
+use opentimstdf::Reader;
 let reader = Reader::open("my_bundle.d")?;
 ```
 
@@ -37,4 +37,4 @@ stream).
 | `prm_target(target_id)`               | `Result<Option<PrmTarget>>`       | prm-PASEF target metadata. |
 | `precursor(precursor_id)`             | `Result<Option<Precursor>>`       | A row from the `Precursors` table. |
 
-See the full type signatures on [docs.rs](https://docs.rs/opentdf).
+See the full type signatures on [docs.rs](https://docs.rs/opentimstdf).

@@ -1,21 +1,21 @@
 [package]
-name = "opentdf-py"
+name = "opentimstdf-py"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.75"
-description = "Python bindings for OpenTDF."
+description = "Python bindings for OpenTimsTDF."
 authors = ["Nathan Riley <git@nathanriley.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/Sigilweaver/OpenTDF"
+repository = "https://github.com/Sigilweaver/OpenTimsTDF"
 publish = false
 
 [lib]
-name = "opentdf"
+name = "opentimstdf"
 crate-type = ["cdylib"]
 
 [lints.rust]
 unsafe_code = "allow"
 
 [dependencies]
-opentdf = { path = ".." }
+opentimstdf = { path = ".." }
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
