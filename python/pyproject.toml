@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "opentimstdf"
-version = "1.0.0"
+version = "1.0.1"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles"
 readme = "README.md"
 license = { text = "Apache-2.0" }

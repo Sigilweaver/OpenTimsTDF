@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-05-17
+
+### Changed
+
+- README: standardize structure and docs link format (consistent with
+  OpenTFRaw and OpenWRaw).
+- Docs: rename all `opentdf` references to `opentimstdf` throughout the
+  Docusaurus source pages.
+
 ## [1.0.0] - 2026-05-17
 
 First stable release under the new name `opentimstdf` (renamed from
@@ -68,3 +77,7 @@ Initial public release.
 - Tune-method XML blocks under `*.m/`.
 - Proprietary polynomial calibration models (the linear model is
   used; see `docs/format/04-tof-to-mz-calibration.md`).
+
+[1.0.1]: https://github.com/Sigilweaver/OpenTimsTDF/releases/tag/v1.0.1
+[1.0.0]: https://github.com/Sigilweaver/OpenTimsTDF/releases/tag/v1.0.0
+[0.1.1]: https://github.com/Sigilweaver/OpenTimsTDF/releases/tag/v0.1.1
