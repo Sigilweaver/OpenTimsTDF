@@ -6,11 +6,11 @@
     },
     "routes": [
         {
-            "pattern": "sigilweaver.app/opentdf/docs",
+            "pattern": "sigilweaver.app/opentimstdf/docs",
             "zone_name": "sigilweaver.app"
         },
         {
-            "pattern": "sigilweaver.app/opentdf/docs/*",
+            "pattern": "sigilweaver.app/opentimstdf/docs/*",
             "zone_name": "sigilweaver.app"
         }
     ]
