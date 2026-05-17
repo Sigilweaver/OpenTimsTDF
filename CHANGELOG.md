@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Removed needless borrows in `Reader::open()` calls in integration tests
+  (resolves `clippy::needless_borrows_for_generic_args`).
+
+### Added
+
+- `publish.yml` GitHub Actions workflow: publishes the `opentdf` crate to
+  crates.io and the Python wheel to PyPI via OIDC Trusted Publishing on
+  every `v*` tag push.
+
+### Changed
+
+- CI migrated from WarpBuild runners to standard GitHub-hosted
+  (`ubuntu-latest`, `macos-latest`, `windows-latest`).
+
 ## [0.1.1] - 2026-05-16
 
 Initial public release.

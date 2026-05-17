@@ -32,7 +32,7 @@ fn pride_pxd027359_single_peak_frames_exact_match() {
         eprintln!("skipping: PXD027359 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     assert_eq!(r.compression_type(), 2);
 
     let mut checked = 0;
@@ -62,7 +62,7 @@ fn calibration_ranges_match_metadata() {
         eprintln!("skipping: PXD027359 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     let c = r.calibration().expect("calibration");
 
     // Values pulled by hand from analysis.tdf GlobalMetadata:
@@ -92,7 +92,7 @@ fn pride_pxd022216_codec1_numpeaks_match() {
             return;
         }
     };
-    let r = opentdf::Reader::open(&bundle).expect("open");
+    let r = opentdf::Reader::open(bundle).expect("open");
     assert_eq!(r.compression_type(), 1, "bundle should be codec 1");
 
     // Spot-check a handful of frames to avoid decoding the whole run.
@@ -136,7 +136,7 @@ fn pride_pxd039066_schema37_single_peak_frames() {
         eprintln!("skipping: PXD039066 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     assert_eq!(r.compression_type(), 2);
 
     let meta = r.metadata().expect("metadata");
@@ -187,7 +187,7 @@ fn frame_metadata_fields_populated() {
         eprintln!("skipping: PXD027359 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     let frames = r.frames().expect("frames");
     assert!(!frames.is_empty());
 
@@ -224,7 +224,7 @@ fn pasef_msms_info_for_ms2_frame() {
         eprintln!("skipping: PXD027359 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     let frames = r.frames().expect("frames");
 
     // Find the first MS2 frame (msms_type=8 for PASEF DDA).
@@ -275,7 +275,7 @@ fn dia_windows_for_ms2_frame() {
         eprintln!("skipping: PXD025576 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     let frames = r.frames().expect("frames");
 
     // MS1 frames should return None from dia_windows_for_frame.
@@ -317,7 +317,7 @@ fn pasef_bundle_has_no_dia_windows() {
         eprintln!("skipping: PXD027359 cache not present");
         return;
     };
-    let r = opentdf::Reader::open(&dir).expect("open");
+    let r = opentdf::Reader::open(dir).expect("open");
     let frames = r.frames().expect("frames");
 
     let ms2 = frames
@@ -341,7 +341,7 @@ fn prm_pasef_pxd028279_frame_distribution() {
         eprintln!("skipping: probe corpus {} not present", dir.display());
         return;
     }
-    let r = opentdf::Reader::open(&dir).expect("open PXD028279 PRM probe");
+    let r = opentdf::Reader::open(dir).expect("open PXD028279 PRM probe");
 
     let frames = r.frames().expect("frames");
     let total = frames.len();
