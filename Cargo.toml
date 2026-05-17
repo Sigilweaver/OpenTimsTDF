@@ -1,25 +1,21 @@
-[package]
-name = "opentimstdf"
-version = "1.0.3"
+[workspace]
+resolver = "2"
+members = ["crates/opentimstdf", "crates/opentimstdf-py"]
+
+[workspace.package]
+version = "1.0.4"
 edition = "2021"
 rust-version = "1.75"
-description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles."
 authors = ["Nathan Riley <git@nathanriley.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/Sigilweaver/OpenTimsTDF"
 homepage = "https://github.com/Sigilweaver/OpenTimsTDF"
-readme = "README.md"
 keywords = ["mass-spectrometry", "bruker", "timstof", "tdf", "proteomics"]
 categories = ["parser-implementations", "science"]
 
-[lints.rust]
+[workspace.dependencies]
+opentimstdf = { path = "crates/opentimstdf" }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+
+[workspace.lints.rust]
 unsafe_code = "forbid"
-
-[dependencies]
-thiserror = "2"
-rusqlite = { version = "0.31", features = ["bundled"] }
-zstd = "0.13"
-
-[[example]]
-name = "dump"
-path = "examples/dump.rs"

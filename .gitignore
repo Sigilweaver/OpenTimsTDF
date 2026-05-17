@@ -14,7 +14,12 @@ nohup.out
 **/__pycache__/
 **/*.pyc
 **/*.pyo
-*.egg-info/
+**/*.egg-info/
+**/.pytest_cache/
+**/dist/
+**/*.so
+**/*.pyd
+**/*.dylib
 .venv/
 
 # Editor / OS

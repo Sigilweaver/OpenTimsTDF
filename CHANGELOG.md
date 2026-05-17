@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-05-17
+
+### Changed
+
+- Restructured to a Cargo workspace layout. The library crate is now at
+  `crates/opentimstdf/` and the Python bindings crate at
+  `crates/opentimstdf-py/`. The `pyproject.toml` is now at the repository
+  root. No public API changes.
+
 ## [1.0.3] - 2026-05-17
 
 ### Fixed

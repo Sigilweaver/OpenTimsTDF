@@ -4,12 +4,12 @@ build-backend = "maturin"
 
 [project]
 name = "opentimstdf"
-version = "1.0.3"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Nathan Riley", email = "git@nathanriley.com" }]
 requires-python = ">=3.8"
+dynamic = ["version"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -26,4 +26,10 @@ Changelog = "https://github.com/Sigilweaver/OpenTimsTDF/blob/main/CHANGELOG.md"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "opentimstdf"
-manifest-path = "Cargo.toml"
+manifest-path = "crates/opentimstdf-py/Cargo.toml"
+include = [
+    { path = "LICENSE", format = "sdist" },
+    { path = "README.md", format = "sdist" },
+    { path = "CHANGELOG.md", format = "sdist" },
+    { path = "README.md", format = "wheel" },
+]
