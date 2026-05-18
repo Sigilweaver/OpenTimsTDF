@@ -11,6 +11,7 @@
 pub mod calibration;
 pub mod codec;
 pub mod error;
+pub mod mzml;
 pub mod reader;
 pub mod types;
 

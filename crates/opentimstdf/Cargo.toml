@@ -19,3 +19,4 @@ unsafe_code = "forbid"
 thiserror = "2"
 rusqlite = { version = "0.31", features = ["bundled"] }
 zstd = "0.13"
+mass-spec-core = { workspace = true }
