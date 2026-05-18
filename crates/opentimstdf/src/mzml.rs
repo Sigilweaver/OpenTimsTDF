@@ -2,12 +2,12 @@
 //!
 //! Provides:
 //!
-//! * [`TdfSource`] - a [`mass_spec_core::SpectrumSource`] adapter over an
+//! * [`TdfSource`] - a [`openproteo_core::SpectrumSource`] adapter over an
 //!   open [`Reader`]. Use this when you want to feed timsTOF data into any
-//!   `mass-spec-core`-shaped consumer (column store ingest, Arrow bridge,
+//!   `openproteo-core`-shaped consumer (column store ingest, Arrow bridge,
 //!   ...).
 //! * [`write_mzml`] / [`write_indexed_mzml`] - convenience entry points
-//!   that wrap the canonical writer in `mass-spec-core`.
+//!   that wrap the canonical writer in `openproteo-core`.
 //!
 //! Frame -> spectrum projection:
 //!
@@ -33,7 +33,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use mass_spec_core as msc;
+use openproteo_core as msc;
 
 use crate::error::Result;
 use crate::{
@@ -322,12 +322,12 @@ fn build_dia_ms2(
 /// `SpectrumSource` adapter over an open [`Reader`].
 ///
 /// Construct with [`TdfSource::new`]; iterate via the trait's
-/// [`iter_spectra`](mass_spec_core::SpectrumSource::iter_spectra) method.
+/// [`iter_spectra`](openproteo_core::SpectrumSource::iter_spectra) method.
 ///
 /// The iterator buffers every spectrum in memory up front. timsTOF data is
 /// typically O(10 GB) raw / O(GB) decoded; for very large runs the caller
 /// should iterate frame-by-frame using the lower-level [`Reader`] API and
-/// build their own [`mass_spec_core::SpectrumSource`].
+/// build their own [`openproteo_core::SpectrumSource`].
 pub struct TdfSource<'a> {
     reader: &'a Reader,
     bundle_name: String,
@@ -504,7 +504,7 @@ impl msc::SpectrumSource for OwnedTdfSource {
 ///
 /// Convenience wrapper that opens `bundle_dir`, projects every frame into
 /// the appropriate MS1 / PASEF MS2 / diaPASEF MS2 spectra, and emits a
-/// valid mzML 1.1.0 document via the canonical writer in `mass-spec-core`.
+/// valid mzML 1.1.0 document via the canonical writer in `openproteo-core`.
 pub fn write_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Result<()> {
     let mut src = TdfSource::open(bundle_dir)?;
     // Eagerly build so spectrum_count_hint is populated for the writer.

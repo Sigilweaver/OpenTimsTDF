@@ -1,5 +1,5 @@
 //! Conformance harness: every spectrum from `TdfSource` must satisfy
-//! the invariants in `mass-spec-core`.
+//! the invariants in `openproteo-core`.
 //!
 //! Uses the same env var convention as the other tests in this crate:
 //! looks under `re/artifacts/cache/pride/...` for an extracted bundle
@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use mass_spec_core::conformance::assert_source_invariants;
+use openproteo_core::conformance::assert_source_invariants;
 use opentimstdf::mzml::TdfSource;
 
 fn bundle_dir() -> Option<PathBuf> {
