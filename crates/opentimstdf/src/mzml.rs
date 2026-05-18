@@ -468,6 +468,7 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str, n_spectra: usize) -> msc
         software_name: SOFTWARE_NAME.into(),
         software_version: SOFTWARE_VERSION.into(),
         start_timestamp: None,
+        mobility_array_kind: Some(msc::MobilityArrayKind::InverseReducedVsPerCm2),
     }
 }
 
