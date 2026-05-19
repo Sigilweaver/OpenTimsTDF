@@ -6,6 +6,11 @@
 [![docs.rs](https://img.shields.io/docsrs/opentimstdf)](https://docs.rs/opentimstdf)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
+> Part of the [OpenProteo](https://sigilweaver.app/openproteo/docs/)
+> stack for proteomics raw-file access. Sibling readers:
+> [OpenWRaw](https://github.com/Sigilweaver/OpenWRaw) (Waters),
+> [OpenTFRaw](https://github.com/Sigilweaver/OpenTFRaw) (Thermo).
+
 Rust and Python reader for timsTOF `.d/` (TDF) acquisition bundles -
 the SQLite `analysis.tdf` metadata file and the `analysis.tdf_bin`
 binary frame stream. Runs on Linux, macOS, and Windows.

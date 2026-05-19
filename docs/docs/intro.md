@@ -5,6 +5,16 @@ slug: /
 
 # OpenTimsTDF
 
+:::info Part of the OpenProteo stack
+
+OpenTimsTDF is one of the vendor readers in
+[OpenProteo](https://sigilweaver.app/openproteo/docs/), a Rust- and
+Python-native stack for proteomics raw-file access. Sibling readers:
+[OpenWRaw](https://sigilweaver.app/openwraw/docs/) (Waters `.raw/`),
+[OpenTFRaw](https://sigilweaver.app/opentfraw/docs/) (Thermo `.raw`).
+
+:::
+
 OpenTimsTDF is a Rust library that reads timsTOF `.d/` (TDF) acquisition
 bundles - the SQLite `analysis.tdf` metadata file and the
 `analysis.tdf_bin` binary frame stream. The format and codecs were
