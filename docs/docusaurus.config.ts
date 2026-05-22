@@ -3,7 +3,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-    title: 'OpenTDF',
+    title: 'OpenTimsTDF',
     tagline: 'Rust and Python reader for timsTOF .d/ (TDF) bundles',
     favicon: 'img/favicon.ico',
 
@@ -16,10 +16,10 @@ const config: Config = {
     themes: ['@docusaurus/theme-mermaid'],
 
     url: 'https://sigilweaver.app',
-    baseUrl: '/opentdf/docs/',
+    baseUrl: '/OpenTimsTDF/docs/',
 
     organizationName: 'Sigilweaver',
-    projectName: 'OpenTDF',
+    projectName: 'OpenTimsTDF',
 
     onBrokenLinks: 'throw',
 
@@ -35,7 +35,7 @@ const config: Config = {
                 docs: {
                     routeBasePath: '/',
                     sidebarPath: './sidebars.ts',
-                    editUrl: 'https://github.com/Sigilweaver/OpenTDF/tree/main/docs/',
+                    editUrl: 'https://github.com/Sigilweaver/OpenTimsTDF/tree/main/docs/',
                 },
                 blog: false,
                 sitemap: {
@@ -52,8 +52,8 @@ const config: Config = {
 
     themeConfig: {
         metadata: [
-            { name: 'keywords', content: 'OpenTDF, timsTOF, TDF, mass spectrometry, PASEF, diaPASEF, Rust, Python' },
-            { name: 'description', content: 'OpenTDF is a Rust and Python reader for timsTOF .d/ (TDF) bundles.' },
+            { name: 'keywords', content: 'OpenTimsTDF, timsTOF, TDF, mass spectrometry, PASEF, diaPASEF, Rust, Python' },
+            { name: 'description', content: 'OpenTimsTDF is a Rust and Python reader for timsTOF .d/ (TDF) bundles.' },
         ],
         colorMode: {
             defaultMode: 'dark',
@@ -80,12 +80,12 @@ const config: Config = {
                     ],
                 },
                 {
-                    href: 'https://docs.rs/opentdf',
+                    href: 'https://docs.rs/OpenTimsTDF',
                     label: 'API (docs.rs)',
                     position: 'right',
                 },
                 {
-                    href: 'https://github.com/Sigilweaver/OpenTDF',
+                    href: 'https://github.com/Sigilweaver/OpenTimsTDF',
                     label: 'GitHub',
                     position: 'right',
                 },
@@ -97,10 +97,10 @@ const config: Config = {
                 {
                     title: 'Project',
                     items: [
-                        { label: 'GitHub', href: 'https://github.com/Sigilweaver/OpenTDF' },
-                        { label: 'Issues', href: 'https://github.com/Sigilweaver/OpenTDF/issues' },
-                        { label: 'crates.io', href: 'https://crates.io/crates/opentdf' },
-                        { label: 'docs.rs', href: 'https://docs.rs/opentdf' },
+                        { label: 'GitHub', href: 'https://github.com/Sigilweaver/OpenTimsTDF' },
+                        { label: 'Issues', href: 'https://github.com/Sigilweaver/OpenTimsTDF/issues' },
+                        { label: 'crates.io', href: 'https://crates.io/crates/OpenTimsTDF' },
+                        { label: 'docs.rs', href: 'https://docs.rs/OpenTimsTDF' },
                     ],
                 },
                 {
@@ -111,7 +111,7 @@ const config: Config = {
                     ],
                 },
             ],
-            copyright: `Copyright ${new Date().getFullYear()} Sigilweaver Holdings LLC. OpenTDF is Apache-2.0 licensed. Documentation licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC-BY-SA 4.0</a>.`,
+            copyright: `Copyright ${new Date().getFullYear()} Sigilweaver Holdings LLC. OpenTimsTDF is Apache-2.0 licensed. Documentation licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC-BY-SA 4.0</a>.`,
         },
         prism: {
             theme: prismThemes.github,

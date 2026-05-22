@@ -1,5 +1,5 @@
 {
-  "name": "opentdf-docs",
+  "name": "OpenTimsTDF-docs",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,7 @@
     "start": "docusaurus start --port 25810",
     "dev": "docusaurus start --port 25810",
     "build": "docusaurus build",
-    "build:cloudflare": "docusaurus build --out-dir build/opentdf/docs",
+    "build:cloudflare": "docusaurus build --out-dir build/OpenTimsTDF/docs",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
     "typecheck": "tsc"
@@ -30,8 +30,16 @@
     "ws": "^8.20.1"
   },
   "browserslist": {
-    "production": [">0.5%", "not dead", "not op_mini all"],
-    "development": ["last 3 chrome version", "last 3 firefox version", "last 5 safari version"]
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 3 chrome version",
+      "last 3 firefox version",
+      "last 5 safari version"
+    ]
   },
   "engines": {
     "node": ">=18.0"

@@ -1,7 +1,7 @@
 """Smoke tests for the opentimstdf Python bindings.
 
 These exercise the import surface and run against a `.d/` bundle if one is
-available via the `OPENTDF_TEST_BUNDLE` env var. Without a bundle, only the
+available via the `OpenTimsTDF_TEST_BUNDLE` env var. Without a bundle, only the
 import/version checks run.
 """
 
@@ -35,7 +35,7 @@ def test_classes_present() -> None:
 
 
 def test_bundle_roundtrip() -> None:
-    bundle = os.environ.get("OPENTDF_TEST_BUNDLE")
+    bundle = os.environ.get("OpenTimsTDF_TEST_BUNDLE")
     if not bundle:
         return
 

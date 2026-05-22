@@ -12,7 +12,7 @@ use opentimstdf::mzml::TdfSource;
 
 fn bundle_dir() -> Option<PathBuf> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Crate manifest is two levels deep under the OpenTDF workspace root;
+    // Crate manifest is two levels deep under the OpenTimsTDF workspace root;
     // the cache lives at the workspace root.
     let cache = root.join("../../re/artifacts/cache/pride");
     let candidates = [

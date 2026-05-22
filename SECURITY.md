@@ -13,7 +13,7 @@ Only the latest published release receives security updates.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Report privately via [GitHub Security Advisories](https://github.com/Sigilweaver/OpenTDF/security/advisories/new).
+Report privately via [GitHub Security Advisories](https://github.com/Sigilweaver/OpenTimsTDF/security/advisories/new).
 
 Include:
 

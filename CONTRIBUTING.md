@@ -1,6 +1,6 @@
-# Contributing to OpenTDF
+# Contributing to OpenTimsTDF
 
-Thanks for your interest in OpenTDF. This is a small, single-maintainer
+Thanks for your interest in OpenTimsTDF. This is a small, single-maintainer
 project that ships [Apache-2.0](LICENSE) Rust (and Python where
 applicable) tooling for the open mass-spec stack.
 

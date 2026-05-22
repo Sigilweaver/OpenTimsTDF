@@ -1,0 +1,21 @@
+[package]
+name = "opentimstdf-py"
+version = "1.0.3"
+edition = "2021"
+rust-version = "1.75"
+description = "Python bindings for OpenTimsTDF."
+authors = ["Nathan Riley <git@nathanriley.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/Sigilweaver/OpenTimsTDF"
+publish = false
+
+[lib]
+name = "opentimstdf"
+crate-type = ["cdylib"]
+
+[lints.rust]
+unsafe_code = "allow"
+
+[dependencies]
+opentimstdf = { path = ".." }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
