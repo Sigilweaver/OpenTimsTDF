@@ -32,6 +32,10 @@ fn opentimstdf_conformance() {
     };
     let mut src = TdfSource::open(&dir).expect("open bundle");
     let n = assert_source_invariants(&mut src).expect("conformance");
-    assert!(n > 0, "expected at least one spectrum from {}", dir.display());
+    assert!(
+        n > 0,
+        "expected at least one spectrum from {}",
+        dir.display()
+    );
     eprintln!("opentimstdf: {n} spectra passed conformance");
 }

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-21
+
+### Changed
+
+- Depend on `openproteo-core = "1.0.0"` (was `0.1.0`, yanked).
+- MSRV bumped from 1.75 to 1.85 (tracks `openproteo-core 1.0.0`).
+
 ## [1.0.5] - 2026-05-18
 
 ### Changed

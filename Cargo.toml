@@ -3,9 +3,9 @@ resolver = "2"
 members = ["crates/opentimstdf", "crates/opentimstdf-py"]
 
 [workspace.package]
-version = "1.0.5"
+version = "1.0.6"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 authors = ["Nathan Riley <git@nathanriley.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/Sigilweaver/OpenTimsTDF"
@@ -15,7 +15,7 @@ categories = ["parser-implementations", "science"]
 
 [workspace.dependencies]
 opentimstdf = { path = "crates/opentimstdf" }
-openproteo-core = "0.1.0"
+openproteo-core = "1.0.0"
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
 
 [workspace.lints.rust]

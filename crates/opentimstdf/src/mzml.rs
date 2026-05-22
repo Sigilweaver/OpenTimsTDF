@@ -37,8 +37,7 @@ use openproteo_core as msc;
 
 use crate::error::Result;
 use crate::{
-    Calibration, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor as TdfPrecursor,
-    Reader,
+    Calibration, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor as TdfPrecursor, Reader,
 };
 
 const SOFTWARE_NAME: &str = "opentimstdf";
@@ -161,7 +160,12 @@ fn materialize_peaks(
     })
 }
 
-fn build_ms1(scan_number: u32, frame: &Frame, peaks: &[Peak], cal: &Calibration) -> msc::SpectrumRecord {
+fn build_ms1(
+    scan_number: u32,
+    frame: &Frame,
+    peaks: &[Peak],
+    cal: &Calibration,
+) -> msc::SpectrumRecord {
     let pa = materialize_peaks(peaks, cal, None, None).unwrap_or(PeakArrays {
         mz: Vec::new(),
         intensity: Vec::new(),
@@ -204,17 +208,22 @@ fn build_pasef_ms2(
     peaks: &[Peak],
     cal: &Calibration,
 ) -> msc::SpectrumRecord {
-    let pa = materialize_peaks(peaks, cal, Some(info.scan_num_begin), Some(info.scan_num_end))
-        .unwrap_or(PeakArrays {
-            mz: Vec::new(),
-            intensity: Vec::new(),
-            tic: 0.0,
-            base_peak_mz: 0.0,
-            base_peak_intensity: 0.0,
-            low_mz: 0.0,
-            high_mz: 0.0,
-            inv_mobility: None,
-        });
+    let pa = materialize_peaks(
+        peaks,
+        cal,
+        Some(info.scan_num_begin),
+        Some(info.scan_num_end),
+    )
+    .unwrap_or(PeakArrays {
+        mz: Vec::new(),
+        intensity: Vec::new(),
+        tic: 0.0,
+        base_peak_mz: 0.0,
+        base_peak_intensity: 0.0,
+        low_mz: 0.0,
+        high_mz: 0.0,
+        inv_mobility: None,
+    });
     let prec_mz = tdf_prec
         .and_then(|p| p.monoisotopic_mz)
         .or_else(|| tdf_prec.map(|p| p.largest_peak_mz));
