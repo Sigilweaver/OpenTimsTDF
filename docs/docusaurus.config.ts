@@ -85,11 +85,6 @@ const config: Config = {
                     position: 'right',
                 },
                 {
-                    href: 'https://sigilweaver.app',
-                    label: 'Website',
-                    position: 'right',
-                },
-                {
                     href: 'https://github.com/Sigilweaver/OpenTDF',
                     label: 'GitHub',
                     position: 'right',
@@ -106,13 +101,6 @@ const config: Config = {
                         { label: 'Issues', href: 'https://github.com/Sigilweaver/OpenTDF/issues' },
                         { label: 'crates.io', href: 'https://crates.io/crates/opentdf' },
                         { label: 'docs.rs', href: 'https://docs.rs/opentdf' },
-                    ],
-                },
-                {
-                    title: 'Sigilweaver',
-                    items: [
-                        { label: 'Website', href: 'https://sigilweaver.app' },
-                        { label: 'Other projects', href: 'https://sigilweaver.app#projects' },
                     ],
                 },
                 {
