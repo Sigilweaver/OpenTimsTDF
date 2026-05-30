@@ -9,7 +9,8 @@ rust-version = "1.85"
 authors = ["Nathan Riley <git@nathanriley.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/Sigilweaver/OpenTimsTDF"
-homepage = "https://github.com/Sigilweaver/OpenTimsTDF"
+homepage = "https://sigilweaver.app/opentimstdf/"
+documentation = "https://sigilweaver.app/opentimstdf/docs/"
 keywords = ["mass-spectrometry", "bruker", "timstof", "tdf", "proteomics"]
 categories = ["parser-implementations", "science"]
 
