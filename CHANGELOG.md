@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.1.0] - 2026-05-31
+
+### Added
+
+- `CITATION.cff`: author identity (Nathan Riley + ORCID) and a
+  scaffolded `identifiers:` block ready for the Zenodo concept DOI.
+- `CONTRIBUTING.md`.
+- Docusaurus build job in CI.
+
+### Changed
+
+- **Panic surface eliminated (WP17).** Reader mutex locks now
+  `map_err(...)` into `CorruptFrame`-style errors with a "mutex
+  poisoned" message, PyO3 mutex locks raise `PyRuntimeError`, and
+  `chunks_exact(4)` retains a localized `#[allow]`. Library crate
+  carries `#![cfg_attr(not(test), warn(clippy::unwrap_used,
+  clippy::expect_used))]`.
+- Project renamed from OpenTDF to OpenTimsTDF; documentation,
+  scripts, and PyPI metadata updated accordingly.
+- Manifest hygiene (WP13): `homepage` set to <https://sigilweaver.app>
+  and `documentation` link added.
+- README badge block unified across the Sigilweaver portfolio.
+
 ## [1.0.6] - 2026-05-21
 
 ### Changed
