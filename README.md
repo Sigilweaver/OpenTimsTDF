@@ -1,6 +1,7 @@
 # OpenTimsTDF
 
 [![CI](https://github.com/Sigilweaver/OpenTimsTDF/actions/workflows/ci.yml/badge.svg)](https://github.com/Sigilweaver/OpenTimsTDF/actions/workflows/ci.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20470603.svg)](https://doi.org/10.5281/zenodo.20470603)
 [![crates.io](https://img.shields.io/crates/v/opentimstdf.svg)](https://crates.io/crates/opentimstdf)
 [![PyPI](https://img.shields.io/pypi/v/opentimstdf.svg)](https://pypi.org/project/opentimstdf/)
 [![docs.rs](https://img.shields.io/docsrs/opentimstdf)](https://docs.rs/opentimstdf)
