@@ -420,13 +420,16 @@ impl Reader {
     }
 
     fn decode_peaks_codec2(&self, frame: &Frame) -> Result<Vec<Peak>> {
-        let mut f = self.tdf_bin.lock().unwrap();
+        let mut f = self
+            .tdf_bin
+            .lock()
+            .map_err(|_| Error::CorruptFrame(frame.id, "tdf_bin mutex poisoned".into()))?;
         f.seek(SeekFrom::Start(frame.tims_id))?;
 
         let mut header = [0u8; 8];
         f.read_exact(&mut header)?;
-        let block_size = u32::from_le_bytes(header[0..4].try_into().unwrap());
-        let scan_count = u32::from_le_bytes(header[4..8].try_into().unwrap());
+        let block_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
+        let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
             return Err(Error::CorruptFrame(
                 frame.id,
@@ -473,13 +476,16 @@ impl Reader {
             .parse()
             .unwrap_or(0);
 
-        let mut f = self.tdf_bin.lock().unwrap();
+        let mut f = self
+            .tdf_bin
+            .lock()
+            .map_err(|_| Error::CorruptFrame(frame.id, "tdf_bin mutex poisoned".into()))?;
         f.seek(SeekFrom::Start(frame.tims_id))?;
 
         let mut header = [0u8; 8];
         f.read_exact(&mut header)?;
-        let bin_size = u32::from_le_bytes(header[0..4].try_into().unwrap());
-        let scan_count = u32::from_le_bytes(header[4..8].try_into().unwrap());
+        let bin_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
+        let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
             return Err(Error::CorruptFrame(
                 frame.id,
@@ -505,6 +511,8 @@ impl Reader {
         f.read_exact(&mut raw_offsets)?;
         let mut scan_offsets = Vec::with_capacity(scan_count as usize + 1);
         for chunk in raw_offsets.chunks_exact(4) {
+            // chunks_exact(4) guarantees chunk.len() == 4
+            #[allow(clippy::unwrap_used)]
             let o = u32::from_le_bytes(chunk.try_into().unwrap());
             scan_offsets.push(o.saturating_sub(compression_offset) as usize);
         }

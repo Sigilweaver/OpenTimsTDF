@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), warn(clippy::unwrap_used, clippy::expect_used))]
 //! OpenTimsTDF - Rust reader for timsTOF `.d/` (TDF) mass spectrometry bundles.
 //!
 //! The format and codecs are documented in `re/SPEC.md` (and mirrored on

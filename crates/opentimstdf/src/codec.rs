@@ -131,6 +131,8 @@ pub fn decode_codec1(
         let mut tof: u32 = 0;
         let mut prev_was_intensity = true;
         for chunk in scratch.chunks_exact(4) {
+            // chunks_exact(4) guarantees chunk.len() == 4
+            #[allow(clippy::unwrap_used)]
             let v = i32::from_le_bytes(chunk.try_into().unwrap());
             if v >= 0 {
                 if prev_was_intensity {

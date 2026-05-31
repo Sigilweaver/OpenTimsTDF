@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), warn(clippy::unwrap_used, clippy::expect_used))]
 //! Python bindings for OpenTimsTDF.
 //!
 //! Exposes `opentimstdf.Reader`, which opens a `.d/` (TDF) bundle once and
@@ -438,14 +439,18 @@ impl Reader {
 
     #[getter]
     fn compression_type(&self) -> PyResult<u32> {
-        Ok(self.inner.lock().unwrap().compression_type())
+        Ok(self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .compression_type())
     }
 
     fn metadata(&self) -> PyResult<Metadata> {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .metadata()
             .map_err(to_py_err)?
             .into())
@@ -455,7 +460,7 @@ impl Reader {
         let inner = self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .calibration()
             .map_err(to_py_err)?;
         Ok(Calibration { inner })
@@ -465,7 +470,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .frame(id)
             .map_err(to_py_err)?
             .into())
@@ -475,7 +480,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .frames()
             .map_err(to_py_err)?
             .into_iter()
@@ -499,7 +504,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .decode_peaks(&rs_frame)
             .map_err(to_py_err)?
             .into_iter()
@@ -511,7 +516,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .dia_windows_for_frame(frame_id)
             .map_err(to_py_err)?
             .map(Into::into))
@@ -521,7 +526,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .pasef_msms_info_for_frame(frame_id)
             .map_err(to_py_err)?
             .into_iter()
@@ -533,7 +538,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .prm_msms_info_for_frame(frame_id)
             .map_err(to_py_err)?
             .into_iter()
@@ -545,7 +550,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .prm_target(target_id)
             .map_err(to_py_err)?
             .map(Into::into))
@@ -555,7 +560,7 @@ impl Reader {
         Ok(self
             .inner
             .lock()
-            .unwrap()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
             .precursor(precursor_id)
             .map_err(to_py_err)?
             .map(Into::into))

@@ -395,7 +395,8 @@ impl<'a> TdfSource<'a> {
                 &self.calibration,
             )?);
         }
-        Ok(self.spectra.as_ref().unwrap())
+        #[allow(clippy::expect_used)]
+        Ok(self.spectra.as_ref().expect("populated above"))
     }
 }
 
@@ -419,7 +420,8 @@ impl OwnedTdfSource {
                 &self.calibration,
             )?);
         }
-        Ok(self.spectra.as_ref().unwrap())
+        #[allow(clippy::expect_used)]
+        Ok(self.spectra.as_ref().expect("populated above"))
     }
 }
 
