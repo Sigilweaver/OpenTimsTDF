@@ -21,7 +21,6 @@ const sidebars: SidebarsConfig = {
             label: 'Format Specification',
             link: { type: 'doc', id: 'format/overview' },
             items: [
-                'format/overview',
                 'format/tdf-sqlite-schema',
                 'format/tdf-bin-block-stream',
                 'format/frame-payload-encoding',

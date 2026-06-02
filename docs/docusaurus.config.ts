@@ -71,6 +71,12 @@ const config: Config = {
             },
             items: [
                 {
+                    type: 'docSidebar',
+                    sidebarId: 'docsSidebar',
+                    label: 'Documentation',
+                    position: 'left',
+                },
+                {
                     type: 'dropdown',
                     label: 'OpenTimsTDF',
                     position: 'left',

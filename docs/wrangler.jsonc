@@ -1,5 +1,5 @@
 {
-    "name": "OpenTimsTDF-docs",
+    "name": "opentimstdf-docs",
     "compatibility_date": "2024-11-26",
     "assets": {
         "directory": "./build"
