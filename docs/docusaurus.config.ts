@@ -13,10 +13,11 @@ const config: Config = {
             onBrokenMarkdownLinks: 'warn',
         },
     },
+    plugins: ['docusaurus-plugin-llms-txt'],
     themes: ['@docusaurus/theme-mermaid'],
 
     url: 'https://sigilweaver.app',
-    baseUrl: '/OpenTimsTDF/docs/',
+    baseUrl: '/opentimstdf/docs/',
 
     organizationName: 'Sigilweaver',
     projectName: 'OpenTimsTDF',
