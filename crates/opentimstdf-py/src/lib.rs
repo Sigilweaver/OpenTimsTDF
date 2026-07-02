@@ -83,6 +83,18 @@ struct Frame {
 
 #[pymethods]
 impl Frame {
+    /// Ion polarity derived from `mz_calibration_id`.
+    ///
+    /// Returns `"positive"` for calibration id 1 and `"negative"` for id 2.
+    /// Dual-polarity acquisitions use alternating calibration ids per frame.
+    #[getter]
+    fn polarity(&self) -> &'static str {
+        match self.mz_calibration_id {
+            2 => "negative",
+            _ => "positive",
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Frame(id={}, time={:.3}, num_scans={}, num_peaks={}, msms_type={})",
