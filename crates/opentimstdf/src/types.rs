@@ -37,6 +37,9 @@ pub struct Metadata {
     pub acquisition_software: String,
     pub acquisition_software_version: String,
     pub compression_type: u32,
+    /// Acquisition start timestamp from `AcquisitionDateTime` (ISO 8601 string).
+    /// `None` when the key is absent from the bundle.
+    pub acquisition_date_time: Option<String>,
 }
 
 /// One isolation window within a diaPASEF window group (SPEC §8.1).

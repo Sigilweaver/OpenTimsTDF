@@ -125,19 +125,22 @@ struct Metadata {
     acquisition_software_version: String,
     #[pyo3(get)]
     compression_type: u32,
+    #[pyo3(get)]
+    acquisition_date_time: Option<String>,
 }
 
 #[pymethods]
 impl Metadata {
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(schema={}.{}, instrument='{}', software='{} {}', codec={})",
+            "Metadata(schema={}.{}, instrument='{}', software='{} {}', codec={}, datetime={:?})",
             self.schema_version_major,
             self.schema_version_minor,
             self.instrument_name,
             self.acquisition_software,
             self.acquisition_software_version,
             self.compression_type,
+            self.acquisition_date_time.as_deref().unwrap_or(""),
         )
     }
 }
@@ -151,6 +154,7 @@ impl From<RsMetadata> for Metadata {
             acquisition_software: m.acquisition_software,
             acquisition_software_version: m.acquisition_software_version,
             compression_type: m.compression_type,
+            acquisition_date_time: m.acquisition_date_time,
         }
     }
 }
