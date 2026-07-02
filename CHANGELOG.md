@@ -6,6 +6,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-02
+
+### Added
+
+- `Metadata.acquisition_date_time` (Rust + Python): acquisition start
+  timestamp read from `GlobalMetadata.AcquisitionDateTime`. Returns
+  `None` when the key is absent from the bundle.
+- `Frame.polarity` (Python): ion polarity derived from
+  `mz_calibration_id` - `"positive"` for id 1, `"negative"` for id 2.
+  Useful for dual-polarity acquisitions where frames alternate ids.
+- `DecodedSpectrum` class and `Reader.decode_spectrum(frame)` (Python):
+  decodes peaks and applies calibration in a single lock acquisition,
+  returning parallel `mz`, `inv_mobility`, and `intensity` arrays.
+  Arrays are plain Python lists; convert to numpy with `np.array()`.
+
+### Changed
+
+- `publish.yml`: crates.io publish step uses `continue-on-error: true`
+  so re-triggered tag runs do not fail the workflow when the crate
+  version was already published.
+
 ## [1.1.0] - 2026-05-31
 
 ### Added
