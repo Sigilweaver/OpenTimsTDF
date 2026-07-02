@@ -79,6 +79,7 @@ impl Reader {
         let acquisition_software = meta(&self.conn, "AcquisitionSoftware").unwrap_or_default();
         let acquisition_software_version =
             meta(&self.conn, "AcquisitionSoftwareVersion").unwrap_or_default();
+        let acquisition_date_time = meta(&self.conn, "AcquisitionDateTime").ok();
         Ok(Metadata {
             schema_version_major: schema_major,
             schema_version_minor: schema_minor,
@@ -86,6 +87,7 @@ impl Reader {
             acquisition_software,
             acquisition_software_version,
             compression_type: self.compression_type,
+            acquisition_date_time,
         })
     }
 

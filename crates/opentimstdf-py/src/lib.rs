@@ -83,6 +83,18 @@ struct Frame {
 
 #[pymethods]
 impl Frame {
+    /// Ion polarity derived from `mz_calibration_id`.
+    ///
+    /// Returns `"positive"` for calibration id 1 and `"negative"` for id 2.
+    /// Dual-polarity acquisitions use alternating calibration ids per frame.
+    #[getter]
+    fn polarity(&self) -> &'static str {
+        match self.mz_calibration_id {
+            2 => "negative",
+            _ => "positive",
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Frame(id={}, time={:.3}, num_scans={}, num_peaks={}, msms_type={})",
@@ -125,19 +137,22 @@ struct Metadata {
     acquisition_software_version: String,
     #[pyo3(get)]
     compression_type: u32,
+    #[pyo3(get)]
+    acquisition_date_time: Option<String>,
 }
 
 #[pymethods]
 impl Metadata {
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(schema={}.{}, instrument='{}', software='{} {}', codec={})",
+            "Metadata(schema={}.{}, instrument='{}', software='{} {}', codec={}, datetime={:?})",
             self.schema_version_major,
             self.schema_version_minor,
             self.instrument_name,
             self.acquisition_software,
             self.acquisition_software_version,
             self.compression_type,
+            self.acquisition_date_time.as_deref().unwrap_or(""),
         )
     }
 }
@@ -151,6 +166,7 @@ impl From<RsMetadata> for Metadata {
             acquisition_software: m.acquisition_software,
             acquisition_software_version: m.acquisition_software_version,
             compression_type: m.compression_type,
+            acquisition_date_time: m.acquisition_date_time,
         }
     }
 }
@@ -406,6 +422,36 @@ impl From<RsPrecursor> for Precursor {
     }
 }
 
+// -- DecodedSpectrum ---------------------------------------------------------
+
+/// A single frame's peaks with calibrated m/z and inverse-mobility values.
+///
+/// Returned by `Reader.decode_spectrum()`. All three arrays are the same
+/// length; index `i` describes one ion.
+#[pyclass(module = "opentimstdf", name = "DecodedSpectrum")]
+struct DecodedSpectrum {
+    /// Calibrated m/z values (Da).
+    #[pyo3(get)]
+    mz: Vec<f64>,
+    /// Calibrated inverse ion mobility values (1/K0, V·s/cm²).
+    #[pyo3(get)]
+    inv_mobility: Vec<f64>,
+    /// Raw intensity counts.
+    #[pyo3(get)]
+    intensity: Vec<u32>,
+}
+
+#[pymethods]
+impl DecodedSpectrum {
+    fn __len__(&self) -> usize {
+        self.mz.len()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DecodedSpectrum({} peaks)", self.mz.len())
+    }
+}
+
 // -- Reader ------------------------------------------------------------------
 
 /// Open a `.d/` (TDF) bundle and read its metadata and peak data.
@@ -512,6 +558,47 @@ impl Reader {
             .collect())
     }
 
+    /// Decode peaks for a frame and apply calibration in one step.
+    ///
+    /// Returns a `DecodedSpectrum` with parallel `mz`, `inv_mobility`, and
+    /// `intensity` arrays. Equivalent to calling `decode_peaks` and then
+    /// converting each `Peak` via the `Calibration` object, but in a single
+    /// lock acquisition.
+    fn decode_spectrum(&self, frame: &Frame) -> PyResult<DecodedSpectrum> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?;
+        let cal = guard.calibration().map_err(to_py_err)?;
+        let rs_frame = RsFrame {
+            id: frame.id,
+            time: frame.time,
+            num_scans: frame.num_scans,
+            num_peaks: frame.num_peaks,
+            tims_id: frame.tims_id,
+            scan_mode: frame.scan_mode,
+            msms_type: frame.msms_type,
+            mz_calibration_id: frame.mz_calibration_id,
+            accumulation_time: frame.accumulation_time,
+            summed_intensities: frame.summed_intensities,
+        };
+        let peaks = guard.decode_peaks(&rs_frame).map_err(to_py_err)?;
+        let n = peaks.len();
+        let mut mz = Vec::with_capacity(n);
+        let mut inv_mobility = Vec::with_capacity(n);
+        let mut intensity = Vec::with_capacity(n);
+        for p in peaks {
+            mz.push(cal.tof_to_mz(p.tof));
+            inv_mobility.push(cal.scan_to_inv_mobility(p.scan));
+            intensity.push(p.intensity);
+        }
+        Ok(DecodedSpectrum {
+            mz,
+            inv_mobility,
+            intensity,
+        })
+    }
+
     fn dia_windows_for_frame(&self, frame_id: u32) -> PyResult<Option<DiaFrameWindows>> {
         Ok(self
             .inner
@@ -580,6 +667,7 @@ fn opentimstdf(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Calibration>()?;
     m.add_class::<Frame>()?;
     m.add_class::<Peak>()?;
+    m.add_class::<DecodedSpectrum>()?;
     m.add_class::<Metadata>()?;
     m.add_class::<DiaWindow>()?;
     m.add_class::<DiaFrameWindows>()?;
