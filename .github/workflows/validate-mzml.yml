@@ -1,0 +1,64 @@
+# mzML schema validation for OpenTimsTDF.
+#
+# timsTOF acquisitions are large: the smallest suitable public TDF bundle
+# is ~90 MB zipped and expands to a ~500 MB mzML document. That is too
+# heavy to run on every push, so this job runs weekly and on manual
+# dispatch. It downloads a small public Bruker timsTOF .d bundle from
+# PRIDE, converts it to mzML with the to_mzml example, and validates the
+# output against the vendored PSI-MS XSD with xmllint.
+
+name: validate-mzml
+
+on:
+  schedule:
+    # Mondays at 05:00 UTC.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  # Bruker timsTOF .d bundle (~90 MB zipped) from PRIDE PXD036417.
+  BRUKER_ZIP_URL: >-
+    https://ftp.pride.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_BUNDLE: NQO1-F107C_coi-N2-P_200-0C_3996.d
+
+jobs:
+  validate-mzml:
+    name: mzML XSD validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build to_mzml example (release)
+        run: cargo build --release --example to_mzml
+
+      - name: Ensure xmllint is available
+        run: command -v xmllint || (sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils)
+
+      - name: Download and unzip Bruker sample
+        run: |
+          wget -q --user-agent="OpenTimsTDF-CI/1.0" -O bruker.d.zip "$BRUKER_ZIP_URL"
+          echo "Downloaded $(du -sh bruker.d.zip | cut -f1) zip"
+          unzip -q bruker.d.zip
+          test -d "$BRUKER_BUNDLE" || (echo "expected bundle dir $BRUKER_BUNDLE missing" && exit 1)
+
+      - name: Convert timsTOF .d to mzML
+        run: |
+          # The expanded mzML is large; validate the plain document, which
+          # carries the Bruker-specific spectrum and ion-mobility content.
+          # The indexed wrapper is emitted by the shared canonical writer,
+          # covered by OpenProteoCore's own validation.
+          ./target/release/examples/to_mzml "$BRUKER_BUNDLE" bruker.mzML
+          echo "mzML: $(du -sh bruker.mzML | cut -f1)"
+
+      - name: Validate against PSI-MS XSD
+        # --huge lifts libxml2's default text-node size limit, which large
+        # timsTOF base64 peak arrays can otherwise exceed.
+        run: xmllint --huge --noout --schema schema/mzML1.1.0.xsd bruker.mzML
