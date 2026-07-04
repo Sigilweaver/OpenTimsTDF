@@ -1,0 +1,48 @@
+# Fuzzing for OpenTimsTDF.
+#
+# cargo-fuzz requires a nightly toolchain and libFuzzer. Fuzzing is time
+# boxed and runs weekly plus on manual dispatch rather than on every push.
+# Targets live under crates/opentimstdf/fuzz/.
+
+name: fuzz
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: cargo-fuzz
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [decode_codec2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Run ${{ matrix.target }} (time-boxed)
+        working-directory: crates/opentimstdf/fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=180 -print_final_stats=1
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: crates/opentimstdf/fuzz/artifacts/
+          if-no-files-found: ignore

@@ -1,0 +1,24 @@
+[package]
+name = "opentimstdf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.opentimstdf]
+path = ".."
+
+[[bin]]
+name = "decode_codec2"
+path = "fuzz_targets/decode_codec2.rs"
+test = false
+doc = false
+bench = false
+
+# Standalone workspace so the fuzz crate is not pulled into the parent.
+[workspace]

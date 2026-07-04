@@ -21,9 +21,20 @@ pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame>
 }
 
 /// De-transpose and decode a codec-2 inner buffer. See SPEC §4.4.
+///
+/// This is total: any `inner`, `num_scans`, `num_peaks` combination returns
+/// without panicking. `Reader::decode_peaks` validates that
+/// `inner.len() == 4 * (num_scans + 2 * num_peaks)` before calling, but a
+/// corrupt frame can still carry header scan-lengths that over-run the peak
+/// stream even with a correctly sized buffer, so every stream read is
+/// bounds-checked and decoding stops cleanly when the stream is exhausted.
 pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> {
     let dsints = num_scans as usize + 2 * num_peaks as usize;
-    debug_assert_eq!(inner.len(), 4 * dsints);
+    // Guard the de-transpose slicing directly so malformed input to this
+    // public function cannot panic.
+    if inner.len() != 4 * dsints {
+        return Vec::new();
+    }
 
     let b0 = &inner[0..dsints];
     let b1 = &inner[dsints..2 * dsints];
@@ -47,14 +58,17 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
     let mut read: usize = 0;
 
     if ns >= 2 {
-        for scan in 0..(ns - 1) {
+        'scans: for scan in 0..(ns - 1) {
             let peaks_in_scan = (header[scan + 1] / 2) as usize;
             let mut accum: u32 = u32::MAX;
             for _ in 0..peaks_in_scan {
-                accum = accum.wrapping_add(peak_stream[read]);
-                read += 1;
-                let intensity = peak_stream[read];
-                read += 1;
+                let (Some(&delta), Some(&intensity)) =
+                    (peak_stream.get(read), peak_stream.get(read + 1))
+                else {
+                    break 'scans;
+                };
+                accum = accum.wrapping_add(delta);
+                read += 2;
                 peaks.push(Peak {
                     scan: scan as u32,
                     tof: accum,
@@ -67,10 +81,12 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
     let last_scan = ns.saturating_sub(1) as u32;
     let mut accum: u32 = u32::MAX;
     while peaks.len() < np {
-        accum = accum.wrapping_add(peak_stream[read]);
-        read += 1;
-        let intensity = peak_stream[read];
-        read += 1;
+        let (Some(&delta), Some(&intensity)) = (peak_stream.get(read), peak_stream.get(read + 1))
+        else {
+            break;
+        };
+        accum = accum.wrapping_add(delta);
+        read += 2;
         peaks.push(Peak {
             scan: last_scan,
             tof: accum,
@@ -197,4 +213,59 @@ pub(crate) fn lzf_decompress(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a codec-2 `inner` buffer from a logical u32 sequence by
+    /// byte-plane transposition (the inverse of the decoder's de-transpose).
+    fn build_inner(logical: &[u32]) -> Vec<u8> {
+        let n = logical.len();
+        let mut inner = vec![0u8; 4 * n];
+        for (i, &v) in logical.iter().enumerate() {
+            inner[i] = (v & 0xff) as u8;
+            inner[n + i] = ((v >> 8) & 0xff) as u8;
+            inner[2 * n + i] = ((v >> 16) & 0xff) as u8;
+            inner[3 * n + i] = ((v >> 24) & 0xff) as u8;
+        }
+        inner
+    }
+
+    #[test]
+    fn decode_codec2_wrong_length_returns_empty() {
+        // dsints = 3 + 2*2 = 7, so the expected buffer is 28 bytes.
+        assert!(decode_codec2(&[], 3, 2).is_empty());
+        assert!(decode_codec2(&[0u8; 27], 3, 2).is_empty());
+    }
+
+    #[test]
+    fn decode_codec2_corrupt_header_does_not_panic() {
+        // Correct length (28 bytes) but header scan-lengths claim far more
+        // peaks than the stream holds. Must stop cleanly, not panic.
+        let logical = [0u32, 1000, 1000, 1, 100, 5, 200];
+        let inner = build_inner(&logical);
+        let peaks = decode_codec2(&inner, 3, 2);
+        assert!(peaks.len() <= 2);
+    }
+
+    #[test]
+    fn decode_codec2_valid_decode() {
+        // ns=3, np=2. header[1]=header[2]=2 -> one peak each for scans 0,1.
+        // peak_stream = [delta, intensity, delta, intensity].
+        // accum starts at u32::MAX; +1 wraps to 0, +5 wraps to 4.
+        let logical = [0u32, 2, 2, 1, 100, 5, 200];
+        let inner = build_inner(&logical);
+        let peaks = decode_codec2(&inner, 3, 2);
+        assert_eq!(peaks.len(), 2);
+        assert_eq!(
+            (peaks[0].scan, peaks[0].tof, peaks[0].intensity),
+            (0, 0, 100)
+        );
+        assert_eq!(
+            (peaks[1].scan, peaks[1].tof, peaks[1].intensity),
+            (1, 4, 200)
+        );
+    }
 }

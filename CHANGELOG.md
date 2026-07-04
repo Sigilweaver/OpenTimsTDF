@@ -6,6 +6,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- `decode_codec2` no longer panics on malformed codec-2 frame payloads.
+  A corrupt frame whose header scan-lengths over-run the peak stream
+  (even with a correctly sized buffer) previously caused an
+  out-of-bounds panic; the decoder now bounds-checks every read and
+  stops cleanly. Found by fuzzing.
+
+### Added
+
+- `fuzz/` cargo-fuzz harness with a `decode_codec2` target, run weekly
+  and on demand in CI (`.github/workflows/fuzz.yml`).
+
 ## [1.2.0] - 2026-07-02
 
 ### Added
