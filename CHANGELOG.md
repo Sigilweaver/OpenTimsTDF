@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-06
+
 ### Fixed
 
 - `decode_codec2` no longer panics on malformed codec-2 frame payloads.
@@ -18,6 +20,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - `fuzz/` cargo-fuzz harness with a `decode_codec2` target, run weekly
   and on demand in CI (`.github/workflows/fuzz.yml`).
+
+### Changed
+
+- PyPI package now declares `keywords` (`mass-spectrometry`, `bruker`,
+  `timstof`, `tdf`, `proteomics`) so the package is findable via PyPI
+  search; previously only the crates.io side had them.
 
 ## [1.2.0] - 2026-07-02
 

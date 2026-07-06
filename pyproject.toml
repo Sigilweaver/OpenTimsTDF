@@ -5,6 +5,7 @@ build-backend = "maturin"
 [project]
 name = "opentimstdf"
 description = "Rust reader for timsTOF .d/ (TDF) mass spectrometry bundles"
+keywords = ["mass-spectrometry", "bruker", "timstof", "tdf", "proteomics"]
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Nathan Riley", email = "git@nathanriley.com" }]
