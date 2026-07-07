@@ -16,6 +16,8 @@ pub enum Error {
     MissingFile(PathBuf),
     #[error("corrupt frame {0}: {1}")]
     CorruptFrame(u32, String),
+    #[error("internal sqlite connection lock poisoned by a prior panic")]
+    LockPoisoned,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

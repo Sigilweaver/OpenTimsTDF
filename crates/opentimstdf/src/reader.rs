@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -13,12 +13,45 @@ use crate::types::{
     PrmTarget,
 };
 
+/// Reads exactly `buf.len()` bytes from `file` starting at `offset`,
+/// without touching the file's seek cursor. Loops on short reads (the
+/// POSIX `pread` contract `read_at` wraps does not guarantee a single
+/// call fills the buffer).
+fn read_at_exact(file: &File, mut offset: u64, mut buf: &mut [u8]) -> std::io::Result<()> {
+    while !buf.is_empty() {
+        match file.read_at(buf, offset) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "failed to fill whole buffer",
+                ))
+            }
+            Ok(n) => {
+                buf = &mut buf[n..];
+                offset += n as u64;
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
 /// One `.d/` (TDF) bundle on disk.
+///
+/// `conn` is behind a `Mutex` (rusqlite's `Connection` is `!Sync` because of
+/// its internal statement cache) so `&Reader` can be shared across threads;
+/// `decode_peaks` never touches it, so concurrent frame decoding never
+/// contends on that lock, only the (cheap, infrequent) SQL metadata lookups
+/// do.
 pub struct Reader {
     bundle_dir: PathBuf,
-    conn: Connection,
+    conn: Mutex<Connection>,
     compression_type: u32,
-    tdf_bin: Mutex<File>,
+    /// Cached once at `open()` so `decode_peaks_codec1` never has to touch
+    /// `conn` on the per-frame decode path.
+    max_num_peaks_per_scan: u32,
+    tdf_bin: File,
 }
 
 impl Reader {
@@ -40,11 +73,21 @@ impl Reader {
             .trim()
             .parse()
             .map_err(|_| Error::UnsupportedCodec(raw_ct.clone()))?;
+        let max_num_peaks_per_scan: u32 = conn
+            .query_row(
+                "SELECT Value FROM GlobalMetadata WHERE Key='MaxNumPeaksPerScan'",
+                [],
+                |row| row.get::<_, String>(0),
+            )?
+            .trim()
+            .parse()
+            .unwrap_or(0);
         Ok(Reader {
             bundle_dir,
-            conn,
+            conn: Mutex::new(conn),
             compression_type,
-            tdf_bin: Mutex::new(tdf_bin),
+            max_num_peaks_per_scan,
+            tdf_bin,
         })
     }
 
@@ -65,21 +108,22 @@ impl Reader {
                 |row| row.get::<_, String>(0),
             )?)
         }
-        let schema_major: u32 = meta(&self.conn, "SchemaVersionMajor")
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let schema_major: u32 = meta(&conn, "SchemaVersionMajor")
             .unwrap_or_default()
             .trim()
             .parse()
             .unwrap_or(0);
-        let schema_minor: u32 = meta(&self.conn, "SchemaVersionMinor")
+        let schema_minor: u32 = meta(&conn, "SchemaVersionMinor")
             .unwrap_or_default()
             .trim()
             .parse()
             .unwrap_or(0);
-        let instrument_name = meta(&self.conn, "InstrumentName").unwrap_or_default();
-        let acquisition_software = meta(&self.conn, "AcquisitionSoftware").unwrap_or_default();
+        let instrument_name = meta(&conn, "InstrumentName").unwrap_or_default();
+        let acquisition_software = meta(&conn, "AcquisitionSoftware").unwrap_or_default();
         let acquisition_software_version =
-            meta(&self.conn, "AcquisitionSoftwareVersion").unwrap_or_default();
-        let acquisition_date_time = meta(&self.conn, "AcquisitionDateTime").ok();
+            meta(&conn, "AcquisitionSoftwareVersion").unwrap_or_default();
+        let acquisition_date_time = meta(&conn, "AcquisitionDateTime").ok();
         Ok(Metadata {
             schema_version_major: schema_major,
             schema_version_minor: schema_minor,
@@ -113,34 +157,34 @@ impl Reader {
             )?)
         }
 
-        let mut mz_min: f64 = meta(&self.conn, "MzAcqRangeLower")?
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let mut mz_min: f64 = meta(&conn, "MzAcqRangeLower")?
             .trim()
             .parse()
             .unwrap_or(0.0);
-        let mut mz_max: f64 = meta(&self.conn, "MzAcqRangeUpper")?
+        let mut mz_max: f64 = meta(&conn, "MzAcqRangeUpper")?
             .trim()
             .parse()
             .unwrap_or(0.0);
-        let tof_max: u32 = meta(&self.conn, "DigitizerNumSamples")?
+        let tof_max: u32 = meta(&conn, "DigitizerNumSamples")?
             .trim()
             .parse()
             .unwrap_or(0);
-        let acq_sw = meta(&self.conn, "AcquisitionSoftware").unwrap_or_default();
+        let acq_sw = meta(&conn, "AcquisitionSoftware").unwrap_or_default();
         if acq_sw.trim() == "Bruker otofControl" {
             mz_min -= 5.0;
             mz_max += 5.0;
         }
 
-        let im_min: f64 = meta(&self.conn, "OneOverK0AcqRangeLower")?
+        let im_min: f64 = meta(&conn, "OneOverK0AcqRangeLower")?
             .trim()
             .parse()
             .unwrap_or(0.0);
-        let im_max: f64 = meta(&self.conn, "OneOverK0AcqRangeUpper")?
+        let im_max: f64 = meta(&conn, "OneOverK0AcqRangeUpper")?
             .trim()
             .parse()
             .unwrap_or(0.0);
-        let scan_max: u32 = self
-            .conn
+        let scan_max: u32 = conn
             .query_row("SELECT MAX(NumScans) FROM Frames", [], |row| row.get(0))
             .unwrap_or(0);
 
@@ -175,7 +219,8 @@ impl Reader {
     }
 
     pub fn frame(&self, frame_id: u32) -> Result<Frame> {
-        let frame = self.conn.query_row(
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let frame = conn.query_row(
             "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities
              FROM Frames WHERE Id = ?1",
@@ -187,7 +232,8 @@ impl Reader {
 
     /// All frames in ascending id order.
     pub fn frames(&self) -> Result<Vec<Frame>> {
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let mut stmt = conn.prepare(
             "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities
              FROM Frames ORDER BY Id ASC",
@@ -202,8 +248,8 @@ impl Reader {
     /// Returns `None` if the `DiaFrameMsMsInfo` table is absent (non-DIA bundle)
     /// or the frame has no entry (e.g. an MS1 frame).
     pub fn dia_windows_for_frame(&self, frame_id: u32) -> Result<Option<DiaFrameWindows>> {
-        let table_exists: bool = self
-            .conn
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='DiaFrameMsMsInfo'",
                 [],
@@ -215,8 +261,7 @@ impl Reader {
             return Ok(None);
         }
 
-        let window_group: Option<u32> = self
-            .conn
+        let window_group: Option<u32> = conn
             .query_row(
                 "SELECT WindowGroup FROM DiaFrameMsMsInfo WHERE Frame = ?1",
                 [frame_id],
@@ -228,7 +273,7 @@ impl Reader {
             return Ok(None);
         };
 
-        let mut stmt = self.conn.prepare(
+        let mut stmt = conn.prepare(
             "SELECT WindowGroup, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth, CollisionEnergy
              FROM DiaFrameMsMsWindows WHERE WindowGroup = ?1 ORDER BY ScanNumBegin ASC",
         )?;
@@ -257,8 +302,8 @@ impl Reader {
     /// Returns an empty `Vec` if the `PasefFrameMsMsInfo` table is absent or
     /// this frame has no entries (e.g. an MS1 frame).
     pub fn pasef_msms_info_for_frame(&self, frame_id: u32) -> Result<Vec<PasefMsMsInfo>> {
-        let table_exists: bool = self
-            .conn
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PasefFrameMsMsInfo'",
                 [],
@@ -270,7 +315,7 @@ impl Reader {
             return Ok(Vec::new());
         }
 
-        let mut stmt = self.conn.prepare(
+        let mut stmt = conn.prepare(
             "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
                     CollisionEnergy, Precursor
              FROM PasefFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
@@ -296,8 +341,8 @@ impl Reader {
     /// Returns an empty `Vec` if the `PrmFrameMsMsInfo` table is absent or
     /// this frame has no entries (e.g. an MS1 frame).
     pub fn prm_msms_info_for_frame(&self, frame_id: u32) -> Result<Vec<PrmMsMsInfo>> {
-        let table_exists: bool = self
-            .conn
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PrmFrameMsMsInfo'",
                 [],
@@ -309,7 +354,7 @@ impl Reader {
             return Ok(Vec::new());
         }
 
-        let mut stmt = self.conn.prepare(
+        let mut stmt = conn.prepare(
             "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
                     CollisionEnergy, Target
              FROM PrmFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
@@ -334,8 +379,8 @@ impl Reader {
     ///
     /// Returns `None` if the table is absent or the target ID does not exist.
     pub fn prm_target(&self, target_id: u32) -> Result<Option<PrmTarget>> {
-        let table_exists: bool = self
-            .conn
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PrmTargets'",
                 [],
@@ -347,8 +392,7 @@ impl Reader {
             return Ok(None);
         }
 
-        let result = self
-            .conn
+        let result = conn
             .query_row(
                 "SELECT Id, ExternalId, Time, OneOverK0, MonoisotopicMz, Charge, Description
                  FROM PrmTargets WHERE Id = ?1",
@@ -371,8 +415,8 @@ impl Reader {
 
     /// Look up a single precursor by ID from the `Precursors` table (SPEC §8.2).
     pub fn precursor(&self, precursor_id: u32) -> Result<Option<Precursor>> {
-        let table_exists: bool = self
-            .conn
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='Precursors'",
                 [],
@@ -384,8 +428,7 @@ impl Reader {
             return Ok(None);
         }
 
-        let result = self
-            .conn
+        let result = conn
             .query_row(
                 "SELECT Id, LargestPeakMz, AverageMz, MonoisotopicMz, Charge,
                     ScanNumber, Intensity, Parent
@@ -422,14 +465,10 @@ impl Reader {
     }
 
     fn decode_peaks_codec2(&self, frame: &Frame) -> Result<Vec<Peak>> {
-        let mut f = self
-            .tdf_bin
-            .lock()
-            .map_err(|_| Error::CorruptFrame(frame.id, "tdf_bin mutex poisoned".into()))?;
-        f.seek(SeekFrom::Start(frame.tims_id))?;
+        let f = &self.tdf_bin;
 
         let mut header = [0u8; 8];
-        f.read_exact(&mut header)?;
+        read_at_exact(f, frame.tims_id, &mut header)?;
         let block_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -447,7 +486,7 @@ impl Reader {
 
         let payload_len = (block_size - 8) as usize;
         let mut compressed = vec![0u8; payload_len];
-        f.read_exact(&mut compressed)?;
+        read_at_exact(f, frame.tims_id + 8, &mut compressed)?;
 
         let expected_decompressed = 4 * (frame.num_scans as usize + 2 * frame.num_peaks as usize);
         let inner =
@@ -467,25 +506,10 @@ impl Reader {
     }
 
     fn decode_peaks_codec1(&self, frame: &Frame) -> Result<Vec<Peak>> {
-        let max_peaks: u32 = self
-            .conn
-            .query_row(
-                "SELECT Value FROM GlobalMetadata WHERE Key='MaxNumPeaksPerScan'",
-                [],
-                |row| row.get::<_, String>(0),
-            )?
-            .trim()
-            .parse()
-            .unwrap_or(0);
-
-        let mut f = self
-            .tdf_bin
-            .lock()
-            .map_err(|_| Error::CorruptFrame(frame.id, "tdf_bin mutex poisoned".into()))?;
-        f.seek(SeekFrom::Start(frame.tims_id))?;
+        let f = &self.tdf_bin;
 
         let mut header = [0u8; 8];
-        f.read_exact(&mut header)?;
+        read_at_exact(f, frame.tims_id, &mut header)?;
         let bin_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -510,7 +534,7 @@ impl Reader {
         }
 
         let mut raw_offsets = vec![0u8; ((scan_count + 1) * 4) as usize];
-        f.read_exact(&mut raw_offsets)?;
+        read_at_exact(f, frame.tims_id + 8, &mut raw_offsets)?;
         let mut scan_offsets = Vec::with_capacity(scan_count as usize + 1);
         for chunk in raw_offsets.chunks_exact(4) {
             // chunks_exact(4) guarantees chunk.len() == 4
@@ -521,13 +545,17 @@ impl Reader {
 
         let compressed_len = (bin_size - compression_offset) as usize;
         let mut compressed = vec![0u8; compressed_len];
-        f.read_exact(&mut compressed)?;
+        read_at_exact(
+            f,
+            frame.tims_id + u64::from(compression_offset),
+            &mut compressed,
+        )?;
 
         decode_codec1(
             &compressed,
             &scan_offsets,
             frame.num_peaks,
-            max_peaks.max(1) as usize,
+            self.max_num_peaks_per_scan.max(1) as usize,
         )
         .map_err(|e| Error::CorruptFrame(frame.id, e))
     }

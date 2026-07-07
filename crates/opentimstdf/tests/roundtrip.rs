@@ -414,3 +414,41 @@ fn prm_pasef_pxd028279_frame_distribution() {
         "mz upper bound"
     );
 }
+
+#[test]
+fn concurrent_decode_across_threads_matches_sequential() {
+    // Reader::decode_peaks no longer takes a lock internally (positional
+    // reads via read_at instead of a shared Mutex<File> seek cursor), so
+    // many threads sharing one &Reader should be able to decode different
+    // frames in parallel and get identical results to sequential decoding.
+    let Some(dir) = bundle_dir(
+        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
+    ) else {
+        eprintln!("skipping: PXD027359 cache not present");
+        return;
+    };
+    let r = opentimstdf::Reader::open(dir).expect("open");
+    let frames = r.frames().expect("frames");
+    let sample: Vec<_> = frames.into_iter().take(64).collect();
+
+    let sequential: Vec<Vec<opentimstdf::Peak>> = sample
+        .iter()
+        .map(|f| r.decode_peaks(f).expect("sequential decode"))
+        .collect();
+
+    let concurrent: Vec<Vec<opentimstdf::Peak>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = sample
+            .iter()
+            .map(|f| scope.spawn(|| r.decode_peaks(f).expect("concurrent decode")))
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    assert_eq!(sequential.len(), concurrent.len());
+    for (seq, conc) in sequential.iter().zip(concurrent.iter()) {
+        assert_eq!(seq.len(), conc.len());
+        for (a, b) in seq.iter().zip(conc.iter()) {
+            assert_eq!((a.scan, a.tof, a.intensity), (b.scan, b.tof, b.intensity));
+        }
+    }
+}
