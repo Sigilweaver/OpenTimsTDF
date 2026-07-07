@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use numpy::{IntoPyArray, PyArray1, PyUntypedArrayMethods};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -427,28 +428,30 @@ impl From<RsPrecursor> for Precursor {
 /// A single frame's peaks with calibrated m/z and inverse-mobility values.
 ///
 /// Returned by `Reader.decode_spectrum()`. All three arrays are the same
-/// length; index `i` describes one ion.
+/// length; index `i` describes one ion. Arrays are plain `numpy.ndarray`s
+/// built by handing NumPy the already-allocated Rust buffer directly
+/// (no per-element Python object / list conversion).
 #[pyclass(module = "opentimstdf", name = "DecodedSpectrum")]
 struct DecodedSpectrum {
-    /// Calibrated m/z values (Da).
+    /// Calibrated m/z values (Da), `dtype=float64`.
     #[pyo3(get)]
-    mz: Vec<f64>,
-    /// Calibrated inverse ion mobility values (1/K0, V·s/cm²).
+    mz: Py<PyArray1<f64>>,
+    /// Calibrated inverse ion mobility values (1/K0, V·s/cm²), `dtype=float64`.
     #[pyo3(get)]
-    inv_mobility: Vec<f64>,
-    /// Raw intensity counts.
+    inv_mobility: Py<PyArray1<f64>>,
+    /// Raw intensity counts, `dtype=uint32`.
     #[pyo3(get)]
-    intensity: Vec<u32>,
+    intensity: Py<PyArray1<u32>>,
 }
 
 #[pymethods]
 impl DecodedSpectrum {
-    fn __len__(&self) -> usize {
-        self.mz.len()
+    fn __len__(&self, py: Python<'_>) -> usize {
+        self.mz.bind(py).len()
     }
 
-    fn __repr__(&self) -> String {
-        format!("DecodedSpectrum({} peaks)", self.mz.len())
+    fn __repr__(&self, py: Python<'_>) -> String {
+        format!("DecodedSpectrum({} peaks)", self.mz.bind(py).len())
     }
 }
 
@@ -564,7 +567,7 @@ impl Reader {
     /// `intensity` arrays. Equivalent to calling `decode_peaks` and then
     /// converting each `Peak` via the `Calibration` object, but in a single
     /// lock acquisition.
-    fn decode_spectrum(&self, frame: &Frame) -> PyResult<DecodedSpectrum> {
+    fn decode_spectrum(&self, py: Python<'_>, frame: &Frame) -> PyResult<DecodedSpectrum> {
         let guard = self
             .inner
             .lock()
@@ -593,9 +596,9 @@ impl Reader {
             intensity.push(p.intensity);
         }
         Ok(DecodedSpectrum {
-            mz,
-            inv_mobility,
-            intensity,
+            mz: mz.into_pyarray_bound(py).unbind(),
+            inv_mobility: inv_mobility.into_pyarray_bound(py).unbind(),
+            intensity: intensity.into_pyarray_bound(py).unbind(),
         })
     }
 
