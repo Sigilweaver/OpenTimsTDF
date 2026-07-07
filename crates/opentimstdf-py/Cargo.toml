@@ -26,3 +26,4 @@ useless_conversion = "allow"
 [dependencies]
 opentimstdf.workspace = true
 pyo3 = { workspace = true }
+numpy = "0.22"
