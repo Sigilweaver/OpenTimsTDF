@@ -16,6 +16,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - New `audit.yml` workflow runs `cargo audit` against the RustSec Advisory
   DB on dependency changes and weekly. Two pre-existing advisories against
   `pyo3` are temporarily ignored pending a version bump (#1).
+- `Cargo.lock` is now committed rather than gitignored, for reproducible
+  builds of the published crate/wheels.
 
 ## [1.2.1] - 2026-07-06
 
