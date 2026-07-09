@@ -469,6 +469,15 @@ struct Reader {
     bundle_dir: PathBuf,
 }
 
+impl Reader {
+    /// Lock the underlying reader.
+    fn locked_inner(&self) -> PyResult<std::sync::MutexGuard<'_, RsReader>> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))
+    }
+}
+
 #[pymethods]
 impl Reader {
     #[new]
@@ -488,48 +497,25 @@ impl Reader {
 
     #[getter]
     fn compression_type(&self) -> PyResult<u32> {
-        Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
-            .compression_type())
+        Ok(self.locked_inner()?.compression_type())
     }
 
     fn metadata(&self) -> PyResult<Metadata> {
-        Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
-            .metadata()
-            .map_err(to_py_err)?
-            .into())
+        Ok(self.locked_inner()?.metadata().map_err(to_py_err)?.into())
     }
 
     fn calibration(&self) -> PyResult<Calibration> {
-        let inner = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
-            .calibration()
-            .map_err(to_py_err)?;
+        let inner = self.locked_inner()?.calibration().map_err(to_py_err)?;
         Ok(Calibration { inner })
     }
 
     fn frame(&self, id: u32) -> PyResult<Frame> {
-        Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
-            .frame(id)
-            .map_err(to_py_err)?
-            .into())
+        Ok(self.locked_inner()?.frame(id).map_err(to_py_err)?.into())
     }
 
     fn frames(&self) -> PyResult<Vec<Frame>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .frames()
             .map_err(to_py_err)?
             .into_iter()
@@ -551,9 +537,7 @@ impl Reader {
             summed_intensities: frame.summed_intensities,
         };
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .decode_peaks(&rs_frame)
             .map_err(to_py_err)?
             .into_iter()
@@ -568,10 +552,7 @@ impl Reader {
     /// converting each `Peak` via the `Calibration` object, but in a single
     /// lock acquisition.
     fn decode_spectrum(&self, py: Python<'_>, frame: &Frame) -> PyResult<DecodedSpectrum> {
-        let guard = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?;
+        let guard = self.locked_inner()?;
         let cal = guard.calibration().map_err(to_py_err)?;
         let rs_frame = RsFrame {
             id: frame.id,
@@ -604,9 +585,7 @@ impl Reader {
 
     fn dia_windows_for_frame(&self, frame_id: u32) -> PyResult<Option<DiaFrameWindows>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .dia_windows_for_frame(frame_id)
             .map_err(to_py_err)?
             .map(Into::into))
@@ -614,9 +593,7 @@ impl Reader {
 
     fn pasef_msms_info_for_frame(&self, frame_id: u32) -> PyResult<Vec<PasefMsMsInfo>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .pasef_msms_info_for_frame(frame_id)
             .map_err(to_py_err)?
             .into_iter()
@@ -626,9 +603,7 @@ impl Reader {
 
     fn prm_msms_info_for_frame(&self, frame_id: u32) -> PyResult<Vec<PrmMsMsInfo>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .prm_msms_info_for_frame(frame_id)
             .map_err(to_py_err)?
             .into_iter()
@@ -638,9 +613,7 @@ impl Reader {
 
     fn prm_target(&self, target_id: u32) -> PyResult<Option<PrmTarget>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .prm_target(target_id)
             .map_err(to_py_err)?
             .map(Into::into))
@@ -648,9 +621,7 @@ impl Reader {
 
     fn precursor(&self, precursor_id: u32) -> PyResult<Option<Precursor>> {
         Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))?
+            .locked_inner()?
             .precursor(precursor_id)
             .map_err(to_py_err)?
             .map(Into::into))
