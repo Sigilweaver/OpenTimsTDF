@@ -13,8 +13,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   this was a stale exception. Extracted the repeated
   `self.inner.lock().map_err(...)` pattern (12 call sites) into a
   `Reader::locked_inner` helper.
-- CI (`ci.yml`) now builds and tests on `windows-latest` in addition to
-  Linux/macOS, matching the wheel targets `publish.yml` already ships.
 - New `audit.yml` workflow runs `cargo audit` against the RustSec Advisory
   DB on dependency changes and weekly. Two pre-existing advisories against
   `pyo3` are temporarily ignored pending a version bump (#1).
