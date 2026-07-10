@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/opentimstdf", "crates/opentimstdf-py"]
 
 [workspace.package]
-version = "1.2.1"
+version = "1.2.2"
 edition = "2021"
 rust-version = "1.85"
 authors = ["Nathan Riley <git@nathanriley.com>"]
@@ -16,7 +16,7 @@ categories = ["parser-implementations", "science"]
 
 [workspace.dependencies]
 opentimstdf = { path = "crates/opentimstdf" }
-openproteo-core = "1.0.0"
+openmassspec-core = "1.0.0"
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
 
 [workspace.lints.rust]

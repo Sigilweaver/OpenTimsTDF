@@ -54,7 +54,7 @@ jobs:
           # The expanded mzML is large; validate the plain document, which
           # carries the Bruker-specific spectrum and ion-mobility content.
           # The indexed wrapper is emitted by the shared canonical writer,
-          # covered by OpenProteoCore's own validation.
+          # covered by OpenMassSpecCore's own validation.
           ./target/release/examples/to_mzml "$BRUKER_BUNDLE" bruker.mzML
           echo "mzML: $(du -sh bruker.mzML | cut -f1)"
 

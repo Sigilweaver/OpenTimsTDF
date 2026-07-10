@@ -6,8 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-10
+
 ### Changed
 
+- Dependency renamed `openproteo-core` -> `openmassspec-core` (1.0.0),
+  following the umbrella's rename from OpenProteo to OpenMassSpec.
+  No behavioral change.
 - `opentimstdf-py` no longer opts out of the workspace's
   `unsafe_code = "forbid"` lint; it never contained an `unsafe` block, so
   this was a stale exception. Extracted the repeated

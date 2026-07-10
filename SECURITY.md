@@ -68,9 +68,9 @@ not security issues unless they involve one of the categories above.
 ## Stack context
 
 OpenTimsTDF is one of three vendor readers in the
-[OpenProteo](https://github.com/Sigilweaver/OpenProteo) stack.
+[OpenMassSpec](https://github.com/Sigilweaver/OpenMassSpec) stack.
 Sibling readers:
 [OpenTFRaw](https://github.com/Sigilweaver/OpenTFRaw) (Thermo),
 [OpenWRaw](https://github.com/Sigilweaver/OpenWRaw) (Waters).
 Shared foundation:
-[openproteo-core](https://github.com/Sigilweaver/OpenProteoCore).
+[openmassspec-core](https://github.com/Sigilweaver/OpenMassSpecCore).
