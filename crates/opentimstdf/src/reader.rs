@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -13,13 +12,25 @@ use crate::types::{
     PrmTarget,
 };
 
+/// Positioned read without touching the file's seek cursor: `pread` on
+/// Unix, `ReadFile` with an explicit offset on Windows.
+#[cfg(unix)]
+fn positioned_read(file: &File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::unix::fs::FileExt::read_at(file, buf, offset)
+}
+
+#[cfg(windows)]
+fn positioned_read(file: &File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::windows::fs::FileExt::seek_read(file, buf, offset)
+}
+
 /// Reads exactly `buf.len()` bytes from `file` starting at `offset`,
-/// without touching the file's seek cursor. Loops on short reads (the
-/// POSIX `pread` contract `read_at` wraps does not guarantee a single
+/// without touching the file's seek cursor. Loops on short reads (neither
+/// the POSIX `pread` contract nor Windows `ReadFile` guarantee a single
 /// call fills the buffer).
 fn read_at_exact(file: &File, mut offset: u64, mut buf: &mut [u8]) -> std::io::Result<()> {
     while !buf.is_empty() {
-        match file.read_at(buf, offset) {
+        match positioned_read(file, buf, offset) {
             Ok(0) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::UnexpectedEof,

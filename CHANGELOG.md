@@ -6,6 +6,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-07-10
+
+### Fixed
+
+- `reader.rs`: `read_at_exact` called `std::os::unix::fs::FileExt::read_at`
+  unconditionally, which does not exist on Windows. Broke the Windows
+  wheel build (introduced by the lock-free frame decoding work in
+  0aee1ff7, first surfaced when 1.2.2's release actually cross-compiled
+  for `windows-latest`). Added a `positioned_read` shim that dispatches
+  to `read_at` on Unix and `std::os::windows::fs::FileExt::seek_read` on
+  Windows (identical signatures on both platforms).
+
 ## [1.2.2] - 2026-07-10
 
 ### Changed
