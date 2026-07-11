@@ -24,7 +24,7 @@ fn to_py_err(e: ::opentimstdf::Error) -> PyErr {
 
 // -- Peak --------------------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "Peak")]
+#[pyclass(module = "opentimstdf", name = "Peak", from_py_object)]
 #[derive(Clone, Copy)]
 struct Peak {
     #[pyo3(get)]
@@ -57,7 +57,7 @@ impl From<RsPeak> for Peak {
 
 // -- Frame -------------------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "Frame")]
+#[pyclass(module = "opentimstdf", name = "Frame", from_py_object)]
 #[derive(Clone)]
 struct Frame {
     #[pyo3(get)]
@@ -123,7 +123,7 @@ impl From<RsFrame> for Frame {
 
 // -- Metadata ----------------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "Metadata")]
+#[pyclass(module = "opentimstdf", name = "Metadata", from_py_object)]
 #[derive(Clone)]
 struct Metadata {
     #[pyo3(get)]
@@ -174,7 +174,7 @@ impl From<RsMetadata> for Metadata {
 
 // -- Calibration -------------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "Calibration")]
+#[pyclass(module = "opentimstdf", name = "Calibration", from_py_object)]
 #[derive(Clone, Copy)]
 struct Calibration {
     inner: RsCalibration,
@@ -231,7 +231,7 @@ impl Calibration {
 
 // -- DiaWindow / DiaFrameWindows --------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "DiaWindow")]
+#[pyclass(module = "opentimstdf", name = "DiaWindow", from_py_object)]
 #[derive(Clone)]
 struct DiaWindow {
     #[pyo3(get)]
@@ -261,7 +261,7 @@ impl From<RsDiaWindow> for DiaWindow {
     }
 }
 
-#[pyclass(module = "opentimstdf", name = "DiaFrameWindows")]
+#[pyclass(module = "opentimstdf", name = "DiaFrameWindows", from_py_object)]
 #[derive(Clone)]
 struct DiaFrameWindows {
     #[pyo3(get)]
@@ -284,7 +284,7 @@ impl From<RsDiaFrameWindows> for DiaFrameWindows {
 
 // -- PasefMsMsInfo -----------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "PasefMsMsInfo")]
+#[pyclass(module = "opentimstdf", name = "PasefMsMsInfo", from_py_object)]
 #[derive(Clone)]
 struct PasefMsMsInfo {
     #[pyo3(get)]
@@ -319,7 +319,7 @@ impl From<RsPasefMsMsInfo> for PasefMsMsInfo {
 
 // -- PrmMsMsInfo / PrmTarget -------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "PrmMsMsInfo")]
+#[pyclass(module = "opentimstdf", name = "PrmMsMsInfo", from_py_object)]
 #[derive(Clone)]
 struct PrmMsMsInfo {
     #[pyo3(get)]
@@ -352,7 +352,7 @@ impl From<RsPrmMsMsInfo> for PrmMsMsInfo {
     }
 }
 
-#[pyclass(module = "opentimstdf", name = "PrmTarget")]
+#[pyclass(module = "opentimstdf", name = "PrmTarget", from_py_object)]
 #[derive(Clone)]
 struct PrmTarget {
     #[pyo3(get)]
@@ -387,7 +387,7 @@ impl From<RsPrmTarget> for PrmTarget {
 
 // -- Precursor ---------------------------------------------------------------
 
-#[pyclass(module = "opentimstdf", name = "Precursor")]
+#[pyclass(module = "opentimstdf", name = "Precursor", from_py_object)]
 #[derive(Clone)]
 struct Precursor {
     #[pyo3(get)]
@@ -577,9 +577,9 @@ impl Reader {
             intensity.push(p.intensity);
         }
         Ok(DecodedSpectrum {
-            mz: mz.into_pyarray_bound(py).unbind(),
-            inv_mobility: inv_mobility.into_pyarray_bound(py).unbind(),
-            intensity: intensity.into_pyarray_bound(py).unbind(),
+            mz: mz.into_pyarray(py).unbind(),
+            inv_mobility: inv_mobility.into_pyarray(py).unbind(),
+            intensity: intensity.into_pyarray(py).unbind(),
         })
     }
 
