@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-07-11
+
 ### Security
 
 - Upgraded `pyo3` and `numpy` from 0.22 to 0.29, clearing RUSTSEC-2025-0020
