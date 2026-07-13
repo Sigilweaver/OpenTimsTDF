@@ -6,6 +6,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-07-13
+
+### Fixed
+
+- `OwnedTdfSource`/`TdfSource::iter_spectra` eagerly decoded and memoized
+  every frame into a `Vec` on first call, then cloned it for the returned
+  iterator - two full copies of the run's spectra lived at once, on top of
+  never being lazy in the first place. Replaced with a generator that
+  decodes one frame at a time, queuing only that frame's PASEF/diaPASEF
+  fan-out before moving on. A frame that fails to decode is now skipped
+  rather than aborting the whole run. Closes #4.
+
 ## [1.2.4] - 2026-07-11
 
 ### Security
