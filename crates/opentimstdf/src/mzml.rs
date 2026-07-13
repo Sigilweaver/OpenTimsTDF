@@ -80,6 +80,56 @@ fn instrument_cv(meta: &Metadata) -> msc::CvTerm {
     msc::CvTerm::new("MS:1000122", "Bruker Daltonics instrument model")
 }
 
+/// Minimal structural check for `YYYY-MM-DDTHH:MM:SS[.fraction](Z|+HH:MM|-HH:MM)`.
+///
+/// Not a full RFC 3339 parser (no calendar/range validation) - just enough
+/// to catch the one divergence that actually matters here: Bruker's
+/// `AcquisitionDateTime` is documented as "ISO 8601", and ISO 8601 permits a
+/// local time with no UTC offset at all, whereas RFC 3339 (what
+/// [`msc::RunMetadata::start_timestamp`] promises) always requires one.
+/// Every real `.d/` bundle inspected during this audit (schema versions
+/// spanning multiple instruments/years) included a numeric offset, so this
+/// is expected to pass in practice; the check exists so an unusual bundle
+/// that omits the offset degrades to `None` instead of silently mislabeling
+/// a local time as RFC 3339.
+fn is_rfc3339(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() < 20 {
+        return false;
+    }
+    let digits = |r: std::ops::Range<usize>| b[r].iter().all(u8::is_ascii_digit);
+    if !(digits(0..4) && b[4] == b'-' && digits(5..7) && b[7] == b'-' && digits(8..10)) {
+        return false;
+    }
+    if b[10] != b'T' && b[10] != b't' {
+        return false;
+    }
+    if !(digits(11..13) && b[13] == b':' && digits(14..16) && b[16] == b':' && digits(17..19)) {
+        return false;
+    }
+    let mut rest = &s[19..];
+    if let Some(frac) = rest.strip_prefix('.') {
+        let end = frac
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(frac.len());
+        if end == 0 {
+            return false;
+        }
+        rest = &frac[end..];
+    }
+    if rest.eq_ignore_ascii_case("z") {
+        return true;
+    }
+    let rb = rest.as_bytes();
+    rb.len() == 6
+        && (rb[0] == b'+' || rb[0] == b'-')
+        && rb[1].is_ascii_digit()
+        && rb[2].is_ascii_digit()
+        && rb[3] == b':'
+        && rb[4].is_ascii_digit()
+        && rb[5].is_ascii_digit()
+}
+
 fn polarity_for(frame: &Frame) -> Option<msc::Polarity> {
     match frame.mz_calibration_id {
         1 => Some(msc::Polarity::Positive),
@@ -489,7 +539,18 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
         instrument: instrument_cv(meta),
         software_name: SOFTWARE_NAME.into(),
         software_version: SOFTWARE_VERSION.into(),
-        start_timestamp: None,
+        // `Metadata::acquisition_date_time` is read straight from the
+        // `AcquisitionDateTime` row in `analysis.tdf`'s GlobalMetadata table
+        // (see `Reader::metadata` in reader.rs) and documented there as an
+        // ISO 8601 string. `RunMetadata::start_timestamp` promises RFC 3339,
+        // which additionally requires a UTC offset; `is_rfc3339` guards
+        // against a bundle whose value omits one rather than passing it
+        // through unchecked.
+        start_timestamp: meta
+            .acquisition_date_time
+            .as_deref()
+            .filter(|s| is_rfc3339(s))
+            .map(str::to_string),
         mobility_array_kind: Some(msc::MobilityArrayKind::InverseReducedVsPerCm2),
     }
 }
@@ -528,4 +589,75 @@ pub fn write_indexed_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) 
     let mut src = TdfSource::open(bundle_dir)?;
     msc::write_indexed_mzml(&mut src, out)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_metadata(acquisition_date_time: Option<&str>) -> Metadata {
+        Metadata {
+            schema_version_major: 3,
+            schema_version_minor: 7,
+            instrument_name: "timsTOF Pro".into(),
+            acquisition_software: "timsControl".into(),
+            acquisition_software_version: "2.0.18".into(),
+            compression_type: 2,
+            acquisition_date_time: acquisition_date_time.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn is_rfc3339_accepts_real_bruker_values() {
+        // Pulled from GlobalMetadata.AcquisitionDateTime in real .d/ bundles
+        // (multiple instruments/schema versions) - all include a numeric
+        // UTC offset.
+        for s in [
+            "2018-08-21T20:40:14.356+02:00",
+            "2022-02-22T23:47:02.147-08:00",
+            "2026-03-30T22:54:48.394-07:00",
+            "2019-08-24T18:27:02.345+02:00",
+            "2026-01-01T00:00:00Z",
+        ] {
+            assert!(is_rfc3339(s), "expected {s} to be accepted");
+        }
+    }
+
+    #[test]
+    fn is_rfc3339_rejects_missing_offset_and_garbage() {
+        for s in [
+            "2019-01-17T09:14:39.730",  // ISO 8601 local time, no offset
+            "2019-01-17 09:14:39",      // space separator, no offset
+            "not-a-timestamp",
+            "",
+        ] {
+            assert!(!is_rfc3339(s), "expected {s:?} to be rejected");
+        }
+    }
+
+    #[test]
+    fn run_metadata_for_wires_up_start_timestamp() {
+        let meta = sample_metadata(Some("2018-08-21T20:40:14.356+02:00"));
+        let rm = run_metadata_for(&meta, "bundle.d");
+        assert_eq!(
+            rm.start_timestamp.as_deref(),
+            Some("2018-08-21T20:40:14.356+02:00")
+        );
+    }
+
+    #[test]
+    fn run_metadata_for_none_when_absent() {
+        let meta = sample_metadata(None);
+        let rm = run_metadata_for(&meta, "bundle.d");
+        assert_eq!(rm.start_timestamp, None);
+    }
+
+    #[test]
+    fn run_metadata_for_none_when_not_rfc3339() {
+        // Defensive path: don't claim RFC 3339 compliance for a value that
+        // isn't, even though no real-world bundle observed so far hits this.
+        let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
+        let rm = run_metadata_for(&meta, "bundle.d");
+        assert_eq!(rm.start_timestamp, None);
+    }
 }
