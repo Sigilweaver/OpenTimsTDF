@@ -26,9 +26,11 @@
 //! unique).
 //!
 //! Frames with `msms_type` other than 0/8/9 (e.g. PRM-PASEF = 10) are
-//! skipped for now. Decode errors on individual frames bubble up to abort
-//! the iteration; the canonical writer trusts whatever the iterator
-//! yields.
+//! skipped for now. `iter_spectra` decodes one frame at a time as the
+//! iterator is driven; a frame that fails to decode is skipped rather than
+//! aborting the whole run, per [`msc::SpectrumSource::iter_spectra`]'s
+//! "skip silently" contract - the canonical writer trusts whatever the
+//! iterator yields.
 
 use std::io::Write;
 use std::path::Path;
@@ -333,18 +335,17 @@ fn build_dia_ms2(
 /// Construct with [`TdfSource::new`]; iterate via the trait's
 /// [`iter_spectra`](openmassspec_core::SpectrumSource::iter_spectra) method.
 ///
-/// The iterator buffers every spectrum in memory up front. timsTOF data is
-/// typically O(10 GB) raw / O(GB) decoded; for very large runs the caller
-/// should iterate frame-by-frame using the lower-level [`Reader`] API and
-/// build their own [`openmassspec_core::SpectrumSource`].
+/// `iter_spectra` decodes and projects one frame at a time as the returned
+/// iterator is driven, so memory use is bounded by a single frame's worth
+/// of spectra (PASEF/diaPASEF frames fan out into several spectra each,
+/// which are queued and drained before the next frame is decoded) rather
+/// than the whole run.
 pub struct TdfSource<'a> {
     reader: &'a Reader,
     bundle_name: String,
     metadata: Metadata,
     calibration: Calibration,
     frames: Vec<Frame>,
-    /// Pre-built spectra; populated lazily on the first `iter_spectra` call.
-    spectra: Option<Vec<msc::SpectrumRecord>>,
 }
 
 impl<'a> TdfSource<'a> {
@@ -360,7 +361,6 @@ impl<'a> TdfSource<'a> {
             metadata,
             calibration,
             frames,
-            spectra: None,
         })
     }
 
@@ -383,20 +383,7 @@ impl<'a> TdfSource<'a> {
             metadata,
             calibration,
             frames,
-            spectra: None,
         })
-    }
-
-    fn build_spectra(&mut self) -> Result<&Vec<msc::SpectrumRecord>> {
-        if self.spectra.is_none() {
-            self.spectra = Some(project_frames(
-                self.reader,
-                &self.frames,
-                &self.calibration,
-            )?);
-        }
-        #[allow(clippy::expect_used)]
-        Ok(self.spectra.as_ref().expect("populated above"))
     }
 }
 
@@ -408,69 +395,93 @@ pub struct OwnedTdfSource {
     metadata: Metadata,
     calibration: Calibration,
     frames: Vec<Frame>,
-    spectra: Option<Vec<msc::SpectrumRecord>>,
 }
 
-impl OwnedTdfSource {
-    fn build_spectra(&mut self) -> Result<&Vec<msc::SpectrumRecord>> {
-        if self.spectra.is_none() {
-            self.spectra = Some(project_frames(
-                &self.reader,
-                &self.frames,
-                &self.calibration,
-            )?);
-        }
-        #[allow(clippy::expect_used)]
-        Ok(self.spectra.as_ref().expect("populated above"))
-    }
-}
-
-fn project_frames(
+/// Project one frame into zero or more spectra, incrementing `scan_counter`
+/// for each spectrum produced. Any decode failure - the frame's peaks, its
+/// PASEF info rows, or its diaPASEF windows - causes that frame to be
+/// skipped (returns an empty `Vec`) rather than aborting the caller's
+/// iteration, matching [`msc::SpectrumSource::iter_spectra`]'s silent-skip
+/// contract. A precursor lookup failure for a single PASEF MS2 is narrower:
+/// it only drops that spectrum's precursor metadata, not the spectrum.
+fn spectra_for_frame(
     reader: &Reader,
-    frames: &[Frame],
+    frame: &Frame,
     calibration: &Calibration,
-) -> Result<Vec<msc::SpectrumRecord>> {
-    let mut spectra: Vec<msc::SpectrumRecord> = Vec::with_capacity(frames.len());
-    let mut scan_counter: u32 = 0;
-    for frame in frames {
-        let peaks = reader.decode_peaks(frame)?;
-        match frame.msms_type {
-            0 => {
-                scan_counter += 1;
-                spectra.push(build_ms1(scan_counter, frame, &peaks, calibration));
-            }
-            8 => {
-                let infos = reader.pasef_msms_info_for_frame(frame.id)?;
-                for info in infos {
-                    let prec = reader.precursor(info.precursor_id)?;
-                    scan_counter += 1;
-                    spectra.push(build_pasef_ms2(
-                        scan_counter,
-                        frame,
-                        &info,
-                        prec.as_ref(),
-                        &peaks,
-                        calibration,
-                    ));
-                }
-            }
-            9 => {
-                let windows = reader.dia_windows_for_frame(frame.id)?;
-                if let Some(group) = windows {
-                    for w in &group.windows {
-                        scan_counter += 1;
-                        spectra.push(build_dia_ms2(scan_counter, frame, w, &peaks, calibration));
-                    }
-                }
-            }
-            _ => continue,
+    scan_counter: &mut u32,
+) -> Vec<msc::SpectrumRecord> {
+    let Ok(peaks) = reader.decode_peaks(frame) else {
+        return Vec::new();
+    };
+    match frame.msms_type {
+        0 => {
+            *scan_counter += 1;
+            vec![build_ms1(*scan_counter, frame, &peaks, calibration)]
         }
+        8 => {
+            let Ok(infos) = reader.pasef_msms_info_for_frame(frame.id) else {
+                return Vec::new();
+            };
+            let mut out = Vec::with_capacity(infos.len());
+            for info in infos {
+                let prec = reader.precursor(info.precursor_id).ok().flatten();
+                *scan_counter += 1;
+                out.push(build_pasef_ms2(
+                    *scan_counter,
+                    frame,
+                    &info,
+                    prec.as_ref(),
+                    &peaks,
+                    calibration,
+                ));
+            }
+            out
+        }
+        9 => {
+            let Ok(windows) = reader.dia_windows_for_frame(frame.id) else {
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            if let Some(group) = windows {
+                for w in &group.windows {
+                    *scan_counter += 1;
+                    out.push(build_dia_ms2(*scan_counter, frame, w, &peaks, calibration));
+                }
+            }
+            out
+        }
+        _ => Vec::new(),
     }
-    Ok(spectra)
 }
 
-fn run_metadata_for(meta: &Metadata, bundle_name: &str, n_spectra: usize) -> msc::RunMetadata {
-    let _ = n_spectra;
+/// Build a lazy, frame-at-a-time spectrum iterator. Decodes and projects
+/// one frame per call to `next()` that yields nothing from the pending
+/// queue, so at most one frame's peaks (plus its fan-out of PASEF/diaPASEF
+/// spectra) are held in memory at a time.
+fn frame_iter<'s>(
+    reader: &'s Reader,
+    frames: &'s [Frame],
+    calibration: &'s Calibration,
+) -> impl Iterator<Item = msc::SpectrumRecord> + 's {
+    let mut frame_idx = 0usize;
+    let mut pending = std::collections::VecDeque::new();
+    let mut scan_counter: u32 = 0;
+    std::iter::from_fn(move || loop {
+        if let Some(rec) = pending.pop_front() {
+            return Some(rec);
+        }
+        let frame = frames.get(frame_idx)?;
+        frame_idx += 1;
+        pending.extend(spectra_for_frame(
+            reader,
+            frame,
+            calibration,
+            &mut scan_counter,
+        ));
+    })
+}
+
+fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
     msc::RunMetadata {
         source_file_name: bundle_name.to_string(),
         source_file_format: source_file_format_cv(),
@@ -485,29 +496,19 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str, n_spectra: usize) -> msc
 
 impl<'a> msc::SpectrumSource for TdfSource<'a> {
     fn run_metadata(&self) -> msc::RunMetadata {
-        let n = self.spectra.as_ref().map(|v| v.len()).unwrap_or(0);
-        run_metadata_for(&self.metadata, &self.bundle_name, n)
+        run_metadata_for(&self.metadata, &self.bundle_name)
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
-        let recs = self.build_spectra().cloned().unwrap_or_default();
-        Box::new(recs.into_iter())
-    }
-    fn spectrum_count_hint(&self) -> Option<usize> {
-        self.spectra.as_ref().map(|v| v.len())
+        Box::new(frame_iter(self.reader, &self.frames, &self.calibration))
     }
 }
 
 impl msc::SpectrumSource for OwnedTdfSource {
     fn run_metadata(&self) -> msc::RunMetadata {
-        let n = self.spectra.as_ref().map(|v| v.len()).unwrap_or(0);
-        run_metadata_for(&self.metadata, &self.bundle_name, n)
+        run_metadata_for(&self.metadata, &self.bundle_name)
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
-        let recs = self.build_spectra().cloned().unwrap_or_default();
-        Box::new(recs.into_iter())
-    }
-    fn spectrum_count_hint(&self) -> Option<usize> {
-        self.spectra.as_ref().map(|v| v.len())
+        Box::new(frame_iter(&self.reader, &self.frames, &self.calibration))
     }
 }
 
@@ -518,8 +519,6 @@ impl msc::SpectrumSource for OwnedTdfSource {
 /// valid mzML 1.1.0 document via the canonical writer in `openmassspec-core`.
 pub fn write_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Result<()> {
     let mut src = TdfSource::open(bundle_dir)?;
-    // Eagerly build so spectrum_count_hint is populated for the writer.
-    src.build_spectra()?;
     msc::write_mzml(&mut src, out)?;
     Ok(())
 }
@@ -527,7 +526,6 @@ pub fn write_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Resul
 /// Indexed-mzML equivalent of [`write_mzml`].
 pub fn write_indexed_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Result<()> {
     let mut src = TdfSource::open(bundle_dir)?;
-    src.build_spectra()?;
     msc::write_indexed_mzml(&mut src, out)?;
     Ok(())
 }
