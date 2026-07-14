@@ -807,8 +807,8 @@ mod tests {
     #[test]
     fn is_rfc3339_rejects_missing_offset_and_garbage() {
         for s in [
-            "2019-01-17T09:14:39.730",  // ISO 8601 local time, no offset
-            "2019-01-17 09:14:39",      // space separator, no offset
+            "2019-01-17T09:14:39.730", // ISO 8601 local time, no offset
+            "2019-01-17 09:14:39",     // space separator, no offset
             "not-a-timestamp",
             "",
         ] {

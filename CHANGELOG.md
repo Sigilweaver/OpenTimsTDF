@@ -20,6 +20,41 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   MS2, which isn't tied to a discrete precursor scan the way DDA is.
   Closes #8. Contributed by @Nabejo.
 
+## [1.2.6] - 2026-07-14
+
+### Security
+
+- `decode_peaks_codec1`/`decode_peaks_codec2` allocated buffers sized
+  directly from untrusted `.tdf_bin` block lengths (`block_size`,
+  `bin_size`, and the codec-1 scan-offset table) with no cap against the
+  file's actual size - a crafted/corrupt bundle could claim a length far
+  larger than the file could contain and trigger a multi-gigabyte
+  allocation. A `block_size`/`bin_size` smaller than the 8-byte header
+  could also underflow the `u32` subtraction computing the payload
+  length, and a large `scan_count` could overflow `(scan_count + 1) * 4`;
+  both panicked in debug builds and could wrap to a large value in
+  release. All three allocation sites now go through a new
+  `checked_block_len` guard (u64 arithmetic throughout) that caps the
+  claimed length against the file's remaining size before allocating,
+  and rejects rather than underflows/overflows. Added a
+  `checked_block_len` fuzz target alongside the existing `decode_codec2`
+  one. Closes #7. Contributed by @Nabejo.
+
+### Added
+
+- New `docs/docs/reference/python-api.md` page: a full reference for the
+  `opentimstdf` Python bindings, covering `Reader`'s attributes/methods
+  and the 11 supporting data classes (`Peak`, `Frame`, `Metadata`,
+  `Calibration`, `DiaWindow`, `DiaFrameWindows`, `PasefMsMsInfo`,
+  `PrmMsMsInfo`, `PrmTarget`, `Precursor`, `DecodedSpectrum`). Previously
+  the docs site only linked to docs.rs, which doesn't cover the PyO3
+  surface at all. Closes #3. Contributed by @Nabejo.
+- CI now runs the `cargo fmt` / `clippy` / `test` job on `windows-latest`
+  in addition to `ubuntu-latest` and `macos-latest`. The Unix-only
+  `read_at` blocker was already fixed in 1.2.3; this just turns the
+  Windows leg of the test matrix back on now that nothing blocks it.
+  Closes #2. Contributed by @Nabejo.
+
 ## [1.2.5] - 2026-07-13
 
 ### Fixed

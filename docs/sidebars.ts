@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
             label: 'Reference',
             items: [
                 'reference/api',
+                'reference/python-api',
                 'reference/examples',
             ],
         },
