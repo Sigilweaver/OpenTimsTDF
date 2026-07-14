@@ -20,5 +20,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "checked_block_len"
+path = "fuzz_targets/checked_block_len.rs"
+test = false
+doc = false
+bench = false
+
 # Standalone workspace so the fuzz crate is not pulled into the parent.
 [workspace]

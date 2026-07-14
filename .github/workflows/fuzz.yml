@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [decode_codec2]
+        target: [decode_codec2, checked_block_len]
     steps:
       - uses: actions/checkout@v4
 

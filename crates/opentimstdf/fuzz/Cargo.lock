@@ -136,19 +136,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "openproteo-core"
-version = "1.0.1"
+name = "openmassspec-core"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75e2005b619c6f1087cc4304465dba88de1294e57d6b1f6676ccd1ab0d124e90"
+checksum = "970e92e2989e4c2da54bb2709b883f7b0203bbe684a145fc1c499699b3c2d8c5"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "opentimstdf"
-version = "1.2.0"
+version = "1.2.5"
 dependencies = [
- "openproteo-core",
+ "openmassspec-core",
  "rusqlite",
  "thiserror",
  "zstd",
