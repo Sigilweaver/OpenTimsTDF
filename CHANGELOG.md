@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-07-14
+
 ### Security
 
 - `decode_peaks_codec1`/`decode_peaks_codec2` allocated buffers sized
