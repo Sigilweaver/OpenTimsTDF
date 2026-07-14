@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::calibration::Calibration;
-use crate::codec::{decode_codec1, decode_codec2, frame_from_row};
+use crate::codec::{checked_block_len, decode_codec1, decode_codec2, frame_from_row};
 use crate::error::{Error, Result};
 use crate::types::{
     DiaFrameWindows, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor, PrmMsMsInfo,
@@ -494,13 +494,24 @@ impl Reader {
                 ),
             ));
         }
-        if block_size == 8 {
+        if block_size <= 8 {
             return Ok(Vec::new());
         }
 
-        let payload_len = (block_size - 8) as usize;
+        let payload_offset = frame.tims_id + 8;
+        let file_len = f.metadata()?.len();
+        let payload_len = checked_block_len(file_len, payload_offset, u64::from(block_size) - 8)
+            .ok_or_else(|| {
+                Error::CorruptFrame(
+                    frame.id,
+                    format!(
+                        "block payload (block_size {block_size}) at offset {payload_offset} \
+                         exceeds remaining file size (file_len {file_len})"
+                    ),
+                )
+            })?;
         let mut compressed = vec![0u8; payload_len];
-        read_at_exact(f, frame.tims_id + 8, &mut compressed)?;
+        read_at_exact(f, payload_offset, &mut compressed)?;
 
         let expected_decompressed = 4 * (frame.num_scans as usize + 2 * frame.num_peaks as usize);
         let inner =
@@ -535,35 +546,61 @@ impl Reader {
                 ),
             ));
         }
-        if bin_size == 8 || frame.num_peaks == 0 {
+        if bin_size <= 8 || frame.num_peaks == 0 {
             return Ok(Vec::new());
         }
 
-        let compression_offset = 8u32 + (scan_count + 1) * 4;
-        if bin_size < compression_offset {
+        let file_len = f.metadata()?.len();
+
+        // u64 throughout: scan_count is read straight from the file, so
+        // `(scan_count + 1) * 4` must not be allowed to overflow u32.
+        let offsets_len = (u64::from(scan_count) + 1) * 4;
+        let compression_offset = 8u64 + offsets_len;
+        if u64::from(bin_size) < compression_offset {
             return Err(Error::CorruptFrame(
                 frame.id,
                 format!("bin_size {bin_size} < compression_offset {compression_offset}"),
             ));
         }
 
-        let mut raw_offsets = vec![0u8; ((scan_count + 1) * 4) as usize];
-        read_at_exact(f, frame.tims_id + 8, &mut raw_offsets)?;
+        let offsets_offset = frame.tims_id + 8;
+        let offsets_table_len = checked_block_len(file_len, offsets_offset, offsets_len)
+            .ok_or_else(|| {
+                Error::CorruptFrame(
+                    frame.id,
+                    format!(
+                        "scan offset table (scan_count {scan_count}) at offset {offsets_offset} \
+                         exceeds remaining file size (file_len {file_len})"
+                    ),
+                )
+            })?;
+        let mut raw_offsets = vec![0u8; offsets_table_len];
+        read_at_exact(f, offsets_offset, &mut raw_offsets)?;
         let mut scan_offsets = Vec::with_capacity(scan_count as usize + 1);
         for chunk in raw_offsets.chunks_exact(4) {
             // chunks_exact(4) guarantees chunk.len() == 4
             #[allow(clippy::unwrap_used)]
             let o = u32::from_le_bytes(chunk.try_into().unwrap());
-            scan_offsets.push(o.saturating_sub(compression_offset) as usize);
+            scan_offsets.push(u64::from(o).saturating_sub(compression_offset) as usize);
         }
 
-        let compressed_len = (bin_size - compression_offset) as usize;
+        let compressed_offset = frame.tims_id + compression_offset;
+        let compressed_len = checked_block_len(
+            file_len,
+            compressed_offset,
+            u64::from(bin_size) - compression_offset,
+        )
+        .ok_or_else(|| {
+            Error::CorruptFrame(
+                frame.id,
+                format!(
+                    "compressed payload (bin_size {bin_size}) at offset {compressed_offset} \
+                     exceeds remaining file size (file_len {file_len})"
+                ),
+            )
+        })?;
         let mut compressed = vec![0u8; compressed_len];
-        read_at_exact(
-            f,
-            frame.tims_id + u64::from(compression_offset),
-            &mut compressed,
-        )?;
+        read_at_exact(f, compressed_offset, &mut compressed)?;
 
         decode_codec1(
             &compressed,

@@ -20,6 +20,26 @@ pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame>
     })
 }
 
+/// Caps a claimed read length against what a file could actually contain,
+/// without panicking on any input (including on-disk lengths chosen
+/// adversarially to overflow the arithmetic below).
+///
+/// `file_len` is the total size of the file; `offset` is where the read
+/// would start; `claimed_len` is a length read from the file itself (e.g.
+/// a codec-2 `block_size` or codec-1 `bin_size` derived value) that the
+/// caller is about to `Vec::with_capacity` and read into. Returns
+/// `Some(claimed_len as usize)` only if the read would stay within the
+/// file; otherwise `None`, which the caller should treat as a corrupt or
+/// adversarial frame rather than allocating on the strength of unverified
+/// on-disk data.
+pub fn checked_block_len(file_len: u64, offset: u64, claimed_len: u64) -> Option<usize> {
+    let remaining = file_len.checked_sub(offset)?;
+    if claimed_len > remaining {
+        return None;
+    }
+    usize::try_from(claimed_len).ok()
+}
+
 /// De-transpose and decode a codec-2 inner buffer. See SPEC §4.4.
 ///
 /// This is total: any `inner`, `num_scans`, `num_peaks` combination returns
@@ -218,6 +238,35 @@ pub(crate) fn lzf_decompress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checked_block_len_accepts_len_within_file() {
+        assert_eq!(checked_block_len(100, 10, 90), Some(90));
+        assert_eq!(checked_block_len(100, 10, 0), Some(0));
+        assert_eq!(checked_block_len(100, 100, 0), Some(0));
+    }
+
+    #[test]
+    fn checked_block_len_rejects_len_past_end_of_file() {
+        assert_eq!(checked_block_len(100, 10, 91), None);
+        // Offset already past the end of the file.
+        assert_eq!(checked_block_len(100, 101, 0), None);
+        // Would have wrapped a naive u64 subtraction.
+        assert_eq!(checked_block_len(10, u64::MAX, 1), None);
+    }
+
+    #[test]
+    fn checked_block_len_never_panics_on_adversarial_input() {
+        // Values chosen to stress every overflow-prone combination without
+        // an exhaustive fuzz run (see fuzz_targets/checked_block_len.rs).
+        for file_len in [0u64, 1, u64::MAX / 2, u64::MAX] {
+            for offset in [0u64, 1, u64::MAX / 2, u64::MAX] {
+                for claimed_len in [0u64, 1, u64::MAX / 2, u64::MAX] {
+                    let _ = checked_block_len(file_len, offset, claimed_len);
+                }
+            }
+        }
+    }
 
     /// Build a codec-2 `inner` buffer from a logical u32 sequence by
     /// byte-plane transposition (the inverse of the decoder's de-transpose).
