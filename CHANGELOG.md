@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- New `docs/docs/reference/python-api.md` page: a full reference for the
+  `opentimstdf` Python bindings, covering `Reader`'s attributes/methods
+  and the 11 supporting data classes (`Peak`, `Frame`, `Metadata`,
+  `Calibration`, `DiaWindow`, `DiaFrameWindows`, `PasefMsMsInfo`,
+  `PrmMsMsInfo`, `PrmTarget`, `Precursor`, `DecodedSpectrum`). Previously
+  the docs site only linked to docs.rs, which doesn't cover the PyO3
+  surface at all. Closes #3. Contributed by @Nabejo.
+
 ## [1.2.5] - 2026-07-13
 
 ### Fixed
