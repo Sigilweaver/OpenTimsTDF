@@ -11,3 +11,6 @@ version:
 - [docs.rs/opentimstdf/latest/opentimstdf/struct.Reader.html](https://docs.rs/opentimstdf/latest/opentimstdf/struct.Reader.html)
 
 For a guided tour of the API surface, see the [Reader guide](../guide/reader).
+
+For the Python bindings (`opentimstdf.Reader` and friends), see the
+[Python API reference](./python-api).
