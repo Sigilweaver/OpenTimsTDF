@@ -6,6 +6,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- mzML export now populates `SpectrumRecord.inv_mobility_per_peak` for
+  MS1, PASEF MS2, and diaPASEF MS2 spectra: `materialize_peaks` already
+  carried each peak's mobility scan through to compute the
+  spectrum-level `inv_mobility`, and now also maps each one through
+  `Calibration::scan_to_inv_mobility` into a parallel per-peak array.
+- `PrecursorInfo.precursor_native_id` is now populated for PASEF DDA
+  MS2 spectra, using the same `frame={id} scan=1` format as the parent
+  MS1 spectrum's `native_id` (built from `Precursor::parent_frame_id`),
+  so mzML `spectrumRef` lookups round-trip. Left as `None` for diaPASEF
+  MS2, which isn't tied to a discrete precursor scan the way DDA is.
+  Closes #8. Contributed by @Nabejo.
+
 ## [1.2.6] - 2026-07-14
 
 ### Security

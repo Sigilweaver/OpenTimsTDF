@@ -144,6 +144,7 @@ fn polarity_for(frame: &Frame) -> Option<msc::Polarity> {
 struct PeakArrays {
     mz: Vec<f64>,
     intensity: Vec<f32>,
+    inv_mobility_per_peak: Option<Vec<f32>>,
     tic: f64,
     base_peak_mz: f64,
     base_peak_intensity: f64,
@@ -180,6 +181,7 @@ fn materialize_peaks(
 
     let mut mz = Vec::with_capacity(filtered.len());
     let mut intensity = Vec::with_capacity(filtered.len());
+    let mut inv_mobility_per_peak = Vec::with_capacity(filtered.len());
     let mut tic: f64 = 0.0;
     let mut bp_mz = filtered[0].0;
     let mut bp_int: f32 = 0.0;
@@ -187,6 +189,7 @@ fn materialize_peaks(
     for (m, i, s) in &filtered {
         mz.push(*m);
         intensity.push(*i);
+        inv_mobility_per_peak.push(cal.scan_to_inv_mobility(*s) as f32);
         tic += *i as f64;
         if *i > bp_int {
             bp_int = *i;
@@ -203,6 +206,7 @@ fn materialize_peaks(
     Some(PeakArrays {
         mz,
         intensity,
+        inv_mobility_per_peak: Some(inv_mobility_per_peak),
         tic,
         base_peak_mz: bp_mz,
         base_peak_intensity: bp_int as f64,
@@ -221,6 +225,7 @@ fn build_ms1(
     let pa = materialize_peaks(peaks, cal, None, None).unwrap_or(PeakArrays {
         mz: Vec::new(),
         intensity: Vec::new(),
+        inv_mobility_per_peak: None,
         tic: 0.0,
         base_peak_mz: 0.0,
         base_peak_intensity: 0.0,
@@ -248,7 +253,7 @@ fn build_ms1(
         precursor: None,
         mz: pa.mz,
         intensity: pa.intensity,
-        inv_mobility_per_peak: None,
+        inv_mobility_per_peak: pa.inv_mobility_per_peak,
     }
 }
 
@@ -269,6 +274,7 @@ fn build_pasef_ms2(
     .unwrap_or(PeakArrays {
         mz: Vec::new(),
         intensity: Vec::new(),
+        inv_mobility_per_peak: None,
         tic: 0.0,
         base_peak_mz: 0.0,
         base_peak_intensity: 0.0,
@@ -287,7 +293,11 @@ fn build_pasef_ms2(
         intensity: tdf_prec.map(|p| p.intensity),
         collision_energy: Some(info.collision_energy),
         ce_is_nce: false,
-        precursor_native_id: None,
+        // Same native-ID format used for the MS1 spectrum (`build_ms1`,
+        // above), so mzML `spectrumRef` lookups round-trip: the MS1 frame
+        // this precursor was selected from is `parent_frame_id`, and every
+        // MS1 spectrum has exactly one scan (`scan=1`).
+        precursor_native_id: tdf_prec.map(|p| format!("frame={} scan=1", p.parent_frame_id)),
         activation: Some(msc::Activation::HCD),
         analyzer: Some(msc::Analyzer::TOFMS),
     });
@@ -314,7 +324,7 @@ fn build_pasef_ms2(
         precursor,
         mz: pa.mz,
         intensity: pa.intensity,
-        inv_mobility_per_peak: None,
+        inv_mobility_per_peak: pa.inv_mobility_per_peak,
     }
 }
 
@@ -334,6 +344,7 @@ fn build_dia_ms2(
     .unwrap_or(PeakArrays {
         mz: Vec::new(),
         intensity: Vec::new(),
+        inv_mobility_per_peak: None,
         tic: 0.0,
         base_peak_mz: 0.0,
         base_peak_intensity: 0.0,
@@ -376,7 +387,7 @@ fn build_dia_ms2(
         precursor,
         mz: pa.mz,
         intensity: pa.intensity,
-        inv_mobility_per_peak: None,
+        inv_mobility_per_peak: pa.inv_mobility_per_peak,
     }
 }
 
@@ -594,6 +605,176 @@ pub fn write_indexed_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_calibration() -> Calibration {
+        Calibration {
+            mz_intercept: 1.0,
+            mz_slope: 0.001,
+            im_intercept: 0.1,
+            im_slope: 0.002,
+        }
+    }
+
+    fn sample_frame(msms_type: u32) -> Frame {
+        Frame {
+            id: 7,
+            time: 12.5,
+            num_scans: 10,
+            num_peaks: 3,
+            tims_id: 0,
+            scan_mode: msms_type,
+            msms_type,
+            mz_calibration_id: 1,
+            accumulation_time: None,
+            summed_intensities: None,
+        }
+    }
+
+    #[test]
+    fn materialize_peaks_wires_up_inv_mobility_per_peak() {
+        let cal = sample_calibration();
+        let peaks = [
+            Peak {
+                scan: 5,
+                tof: 100,
+                intensity: 10,
+            },
+            Peak {
+                scan: 2,
+                tof: 300,
+                intensity: 20,
+            },
+            Peak {
+                scan: 8,
+                tof: 50,
+                intensity: 5,
+            },
+        ];
+        let pa = materialize_peaks(&peaks, &cal, None, None).expect("non-empty peaks");
+        let inv_mobility_per_peak = pa
+            .inv_mobility_per_peak
+            .expect("peaks present -> Some per-peak array");
+
+        // Parallel to `mz`/`intensity`: same length, and reordered by the
+        // same mz-ascending sort (materialize_peaks sorts by mz, not scan).
+        assert_eq!(inv_mobility_per_peak.len(), pa.mz.len());
+        assert_eq!(inv_mobility_per_peak.len(), peaks.len());
+
+        // mz ascending <=> tof ascending here (tof_to_mz is monotonic), so
+        // the sorted order is tof 50, 100, 300 -> scans 8, 5, 2.
+        let expected_scans = [8u32, 5, 2];
+        for (got, &scan) in inv_mobility_per_peak.iter().zip(&expected_scans) {
+            let want = cal.scan_to_inv_mobility(scan) as f32;
+            assert_eq!(*got, want);
+        }
+    }
+
+    #[test]
+    fn materialize_peaks_none_when_no_peaks_in_range() {
+        let cal = sample_calibration();
+        let peaks = [Peak {
+            scan: 1,
+            tof: 100,
+            intensity: 10,
+        }];
+        // scan_lo/scan_hi exclude the only peak.
+        assert!(materialize_peaks(&peaks, &cal, Some(5), Some(10)).is_none());
+    }
+
+    #[test]
+    fn build_pasef_ms2_wires_up_precursor_native_id_from_parent_frame() {
+        let cal = sample_calibration();
+        let frame = sample_frame(8);
+        let peaks = [Peak {
+            scan: 3,
+            tof: 100,
+            intensity: 10,
+        }];
+        let info = PasefMsMsInfo {
+            frame_id: frame.id,
+            scan_num_begin: 0,
+            scan_num_end: 10,
+            isolation_mz: 500.0,
+            isolation_width: 2.0,
+            collision_energy: 20.0,
+            precursor_id: 1,
+        };
+        let prec = TdfPrecursor {
+            id: 1,
+            largest_peak_mz: 500.0,
+            average_mz: 500.0,
+            monoisotopic_mz: Some(500.0),
+            charge: Some(2),
+            scan_number: 3.0,
+            intensity: 1000.0,
+            parent_frame_id: 6,
+        };
+
+        let rec = build_pasef_ms2(1, &frame, &info, Some(&prec), &peaks, &cal);
+        assert_eq!(
+            rec.precursor
+                .as_ref()
+                .unwrap()
+                .precursor_native_id
+                .as_deref(),
+            // Same format as build_ms1's native_id for frame 6, whose MS1
+            // spectrum this precursor was selected from.
+            Some("frame=6 scan=1")
+        );
+        assert_eq!(
+            rec.inv_mobility_per_peak.as_ref().map(Vec::len),
+            Some(peaks.len())
+        );
+    }
+
+    #[test]
+    fn build_pasef_ms2_precursor_native_id_none_without_precursor_row() {
+        let cal = sample_calibration();
+        let frame = sample_frame(8);
+        let peaks = [Peak {
+            scan: 3,
+            tof: 100,
+            intensity: 10,
+        }];
+        let info = PasefMsMsInfo {
+            frame_id: frame.id,
+            scan_num_begin: 0,
+            scan_num_end: 10,
+            isolation_mz: 500.0,
+            isolation_width: 2.0,
+            collision_energy: 20.0,
+            precursor_id: 1,
+        };
+
+        let rec = build_pasef_ms2(1, &frame, &info, None, &peaks, &cal);
+        assert_eq!(rec.precursor.as_ref().unwrap().precursor_native_id, None);
+    }
+
+    #[test]
+    fn build_dia_ms2_leaves_precursor_native_id_none() {
+        let cal = sample_calibration();
+        let frame = sample_frame(9);
+        let peaks = [Peak {
+            scan: 3,
+            tof: 100,
+            intensity: 10,
+        }];
+        let window = DiaWindow {
+            window_group: 1,
+            scan_num_begin: 0,
+            scan_num_end: 10,
+            isolation_mz: 500.0,
+            isolation_width: 2.0,
+            collision_energy: 20.0,
+        };
+
+        let rec = build_dia_ms2(1, &frame, &window, &peaks, &cal);
+        assert_eq!(rec.precursor.as_ref().unwrap().precursor_native_id, None);
+        assert_eq!(
+            rec.inv_mobility_per_peak.as_ref().map(Vec::len),
+            Some(peaks.len())
+        );
+    }
 
     fn sample_metadata(acquisition_date_time: Option<&str>) -> Metadata {
         Metadata {
