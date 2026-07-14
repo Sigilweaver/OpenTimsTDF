@@ -6,6 +6,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- CI now runs the `cargo fmt` / `clippy` / `test` job on `windows-latest`
+  in addition to `ubuntu-latest` and `macos-latest`. The Unix-only
+  `read_at` blocker was already fixed in 1.2.3; this just turns the
+  Windows leg of the test matrix back on now that nothing blocks it.
+  Closes #2. Contributed by @Nabejo.
+
 ## [1.2.5] - 2026-07-13
 
 ### Fixed
