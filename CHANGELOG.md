@@ -8,6 +8,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- New `docs/docs/reference/python-api.md` page: a full reference for the
+  `opentimstdf` Python bindings, covering `Reader`'s attributes/methods
+  and the 11 supporting data classes (`Peak`, `Frame`, `Metadata`,
+  `Calibration`, `DiaWindow`, `DiaFrameWindows`, `PasefMsMsInfo`,
+  `PrmMsMsInfo`, `PrmTarget`, `Precursor`, `DecodedSpectrum`). Previously
+  the docs site only linked to docs.rs, which doesn't cover the PyO3
+  surface at all. Closes #3. Contributed by @Nabejo.
 - CI now runs the `cargo fmt` / `clippy` / `test` job on `windows-latest`
   in addition to `ubuntu-latest` and `macos-latest`. The Unix-only
   `read_at` blocker was already fixed in 1.2.3; this just turns the
