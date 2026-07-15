@@ -250,6 +250,7 @@ fn build_ms1(
         high_mz: Some(pa.high_mz),
         ion_injection_time_ms: frame.accumulation_time,
         inv_mobility: pa.inv_mobility,
+        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
         precursor: None,
         mz: pa.mz,
         intensity: pa.intensity,
@@ -321,6 +322,7 @@ fn build_pasef_ms2(
         high_mz: Some(pa.high_mz),
         ion_injection_time_ms: frame.accumulation_time,
         inv_mobility: pa.inv_mobility,
+        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
         precursor,
         mz: pa.mz,
         intensity: pa.intensity,
@@ -384,6 +386,7 @@ fn build_dia_ms2(
         high_mz: Some(pa.high_mz),
         ion_injection_time_ms: frame.accumulation_time,
         inv_mobility: pa.inv_mobility,
+        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
         precursor,
         mz: pa.mz,
         intensity: pa.intensity,

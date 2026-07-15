@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-15
+
 ### Added
 
 - mzML export now populates `SpectrumRecord.inv_mobility_per_peak` for
@@ -19,6 +21,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   so mzML `spectrumRef` lookups round-trip. Left as `None` for diaPASEF
   MS2, which isn't tied to a discrete precursor scan the way DDA is.
   Closes #8. Contributed by @Nabejo.
+
+### Fixed
+
+- `instrument_cv`'s lookup table carried 5 wrong PSI-MS accessions,
+  checked directly against psi-ms.obo rather than trusting the existing
+  table. Most seriously, `impact` resolved to `MS:1001581`, which is
+  "FAIMS compensation voltage", not a Bruker instrument model - every
+  "impact"-family bundle emitted a semantically wrong
+  `instrumentConfiguration` cvParam. `timsTOF` (bare)/`timsTOF SCP`/
+  `impact II`/`maXis II` were also wrong. Closes #15.
+- Bumped `openmassspec-core` to 1.2.0 and added the `SpectrumRecord.faims_cv`
+  field it requires at all three `msc::SpectrumRecord` construction sites
+  (`build_ms1`/`build_pasef_ms2`/`build_dia_ms2`), fixing a build break:
+  1.2.0 added that field as required, and this crate constructed the
+  struct literal without it. Always `None` - Bruker timsTOF has no FAIMS
+  interface.
 
 ## [1.2.6] - 2026-07-14
 
