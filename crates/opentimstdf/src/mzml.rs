@@ -61,16 +61,16 @@ fn native_id_format_cv() -> msc::CvTerm {
 fn instrument_cv(meta: &Metadata) -> msc::CvTerm {
     let name = meta.instrument_name.as_str();
     let known: &[(&str, &str, &str)] = &[
-        ("timsTOF SCP", "MS:1003229", "timsTOF SCP"),
+        ("timsTOF SCP", "MS:1003231", "timsTOF SCP"),
         ("timsTOF HT", "MS:1003404", "timsTOF HT"),
         ("timsTOF Pro 2", "MS:1003230", "timsTOF Pro 2"),
         ("timsTOF Pro", "MS:1003005", "timsTOF Pro"),
         ("timsTOF fleX", "MS:1003124", "timsTOF fleX"),
-        ("timsTOF", "MS:1003005", "timsTOF"),
-        ("impact II", "MS:1002280", "impact II"),
-        ("impact", "MS:1001581", "Bruker Daltonics impact series"),
-        ("maXis II", "MS:1002281", "maXis II"),
-        ("maXis", "MS:1001541", "Bruker Daltonics maXis series"),
+        ("timsTOF", "MS:1003229", "timsTOF"),
+        ("impact II", "MS:1002666", "impact II"),
+        ("impact", "MS:1002077", "impact"),
+        ("maXis II", "MS:1003004", "maXis II"),
+        ("maXis", "MS:1001541", "maXis"),
     ];
     for (prefix, acc, term_name) in known {
         if name.starts_with(prefix) {
@@ -840,5 +840,39 @@ mod tests {
         let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
         let rm = run_metadata_for(&meta, "bundle.d");
         assert_eq!(rm.start_timestamp, None);
+    }
+
+    // Regression test: the lookup table in `instrument_cv` previously
+    // carried several transcription errors against the real PSI-MS CV
+    // (psi-ms.obo) - most seriously, "impact" resolved to MS:1001581,
+    // which is actually "FAIMS compensation voltage", not a Bruker
+    // instrument model. Every (name, accession) pair here was checked
+    // against psi-ms.obo directly, not copied from the prior table.
+    #[test]
+    fn instrument_cv_resolves_known_models_to_correct_psi_ms_accessions() {
+        let cases = [
+            ("timsTOF SCP", "MS:1003231", "timsTOF SCP"),
+            ("timsTOF HT", "MS:1003404", "timsTOF HT"),
+            ("timsTOF Pro 2", "MS:1003230", "timsTOF Pro 2"),
+            ("timsTOF Pro", "MS:1003005", "timsTOF Pro"),
+            ("timsTOF fleX", "MS:1003124", "timsTOF fleX"),
+            ("timsTOF", "MS:1003229", "timsTOF"),
+            ("impact II", "MS:1002666", "impact II"),
+            ("impact", "MS:1002077", "impact"),
+            ("maXis II", "MS:1003004", "maXis II"),
+            ("maXis", "MS:1001541", "maXis"),
+            (
+                "some future model nobody has heard of",
+                "MS:1000122",
+                "Bruker Daltonics instrument model",
+            ),
+        ];
+        for (name, acc, term_name) in cases {
+            let mut meta = sample_metadata(None);
+            meta.instrument_name = name.into();
+            let cv = instrument_cv(&meta);
+            assert_eq!(cv.accession, acc, "wrong accession for {name:?}");
+            assert_eq!(cv.name, term_name, "wrong CV name for {name:?}");
+        }
     }
 }
