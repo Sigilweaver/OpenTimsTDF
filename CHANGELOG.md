@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- `openmassspec-core`'s declared minimum version in `Cargo.toml` was still
+  `"1.0.0"`, left behind when 1.3.0 bumped the actual requirement to 1.2.0
+  for the `faims_cv` field. `Cargo.lock` already pinned 1.2.0 so normal
+  builds were unaffected, but the published crate manifest advertised a
+  minimum that can't compile - a `cargo update -Z minimal-versions` or an
+  explicit `=1.0.0`/`=1.1.0` pin from a downstream consumer would fail.
+  Bumped the declared minimum to `"1.2.0"` to match.
+
 ## [1.3.0] - 2026-07-15
 
 ### Added
