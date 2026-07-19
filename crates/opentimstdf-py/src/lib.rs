@@ -80,6 +80,8 @@ struct Frame {
     accumulation_time: Option<f64>,
     #[pyo3(get)]
     summed_intensities: Option<u64>,
+    #[pyo3(get)]
+    max_intensity: Option<u64>,
 }
 
 #[pymethods]
@@ -117,6 +119,7 @@ impl From<RsFrame> for Frame {
             mz_calibration_id: f.mz_calibration_id,
             accumulation_time: f.accumulation_time,
             summed_intensities: f.summed_intensities,
+            max_intensity: f.max_intensity,
         }
     }
 }
@@ -535,6 +538,7 @@ impl Reader {
             mz_calibration_id: frame.mz_calibration_id,
             accumulation_time: frame.accumulation_time,
             summed_intensities: frame.summed_intensities,
+            max_intensity: frame.max_intensity,
         };
         Ok(self
             .locked_inner()?
@@ -565,6 +569,7 @@ impl Reader {
             mz_calibration_id: frame.mz_calibration_id,
             accumulation_time: frame.accumulation_time,
             summed_intensities: frame.summed_intensities,
+            max_intensity: frame.max_intensity,
         };
         let peaks = guard.decode_peaks(&rs_frame).map_err(to_py_err)?;
         let n = peaks.len();

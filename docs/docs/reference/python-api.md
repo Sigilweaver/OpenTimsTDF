@@ -76,6 +76,7 @@ stream.
 | `mz_calibration_id` | `int` | Calibration id used for this frame |
 | `accumulation_time` | `float \| None` | TIMS accumulation time (ms) |
 | `summed_intensities` | `int \| None` | Sum of all peak intensities in the frame |
+| `max_intensity` | `int \| None` | Most intense peak in the frame (`Frames.MaxIntensity`) |
 | `polarity` | `str` | `"positive"` or `"negative"`, derived from `mz_calibration_id` |
 
 ### Metadata

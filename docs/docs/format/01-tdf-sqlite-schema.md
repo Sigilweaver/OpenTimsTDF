@@ -50,7 +50,8 @@ Columns that matter for the binary stream:
 | `Time`       | REAL  | Retention time (seconds from start of acquisition). |
 | `AccumulationTime` | REAL | Ion accumulation time in milliseconds (sv >= 3.5; absent in older schemas). |
 | `RampTime`   | REAL  | TIMS ramp (elution) time in milliseconds. Equal to `AccumulationTime` in all observed bundles. |
-| `SummedIntensities` | INT | Sum of all peak intensities in the frame, **normalised to 100 ms accumulation**: `SummedIntensities = sum(raw_intensity) * 100.0 / AccumulationTime_ms`. For bundles where `AccumulationTime ~ 100` the factor is ~ 1.0. Verified on PXD022216 (AT=108.46 ms): ratio decoded_sum / SummedIntensities = 1.08460 +/- 0.00001 across all 57,886 frames. |
+| `SummedIntensities` | INT | Sum of all peak intensities in the frame, **normalised to 100 ms accumulation**: `SummedIntensities = sum(raw_intensity) * 100.0 / AccumulationTime_ms`. For bundles where `AccumulationTime ~ 100` the factor is ~ 1.0. Verified on PXD022216 (AT=108.46 ms): ratio decoded_sum / SummedIntensities = 1.08460 +/- 0.00001 across all 57,886 frames. Consumed as the per-frame point of the whole-run TIC chromatogram in mzML export. |
+| `MaxIntensity` | INT | Most intense single peak in the frame. Consumed as the per-frame point of the whole-run basepeak chromatogram (BPC) in mzML export. |
 | `MzCalibration` | INT | Foreign key into `MzCalibration` table. |
 | `TimsCalibration` | INT | Foreign key into `TimsCalibration` table. |
 

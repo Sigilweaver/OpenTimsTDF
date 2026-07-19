@@ -236,7 +236,7 @@ impl Reader {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
         let frame = conn.query_row(
             "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
-                    MzCalibration, AccumulationTime, SummedIntensities
+                    MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames WHERE Id = ?1",
             [frame_id],
             frame_from_row,
@@ -249,7 +249,7 @@ impl Reader {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
         let mut stmt = conn.prepare(
             "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
-                    MzCalibration, AccumulationTime, SummedIntensities
+                    MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames ORDER BY Id ASC",
         )?;
         let rows = stmt.query_map([], frame_from_row)?;

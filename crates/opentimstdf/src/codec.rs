@@ -4,7 +4,7 @@ use crate::types::{Frame, Peak};
 ///
 /// Column order must match the SELECT used in `Reader::frame()` and `Reader::frames()`:
 /// Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
-/// MzCalibration, AccumulationTime, SummedIntensities
+/// MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
 pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame> {
     Ok(Frame {
         id: row.get(0)?,
@@ -17,6 +17,7 @@ pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame>
         mz_calibration_id: row.get::<_, Option<i64>>(7)?.unwrap_or(1) as u32,
         accumulation_time: row.get(8)?,
         summed_intensities: row.get::<_, Option<i64>>(9)?.map(|v| v as u64),
+        max_intensity: row.get::<_, Option<i64>>(10)?.map(|v| v as u64),
     })
 }
 
