@@ -6,6 +6,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- mzML export now emits a `<chromatogramList>` via
+  `SpectrumSource::iter_chromatograms` on `TdfSource` / `OwnedTdfSource`,
+  which previously used the trait's default empty implementation. Two
+  whole-run traces are produced, one point per frame in acquisition order,
+  built directly from columns `Reader::frames` already SELECTs (no extra
+  SQL, no peak decode): a TIC ("total ion current chromatogram",
+  `MS:1000235`) from `Frames.SummedIntensities`, and a basepeak
+  chromatogram ("basepeak chromatogram", `MS:1000628`) from
+  `Frames.MaxIntensity`. `MaxIntensity` is a new additive column on the
+  `Frames` SELECT and a new `Frame::max_intensity` field (also exposed on
+  the Python `Frame`). A trace whose source column is absent on every frame
+  is omitted rather than emitted empty. SRM/PRM transition chromatograms
+  are intentionally left out: they need genuine per-target cross-frame
+  aggregation of the decoded peak stream, not just column wiring. Closes
+  #25. Contributed by @Nabejo.
+
 ### Fixed
 
 - `openmassspec-core`'s declared minimum version in `Cargo.toml` was still

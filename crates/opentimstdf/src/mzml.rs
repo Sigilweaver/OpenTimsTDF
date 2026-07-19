@@ -9,6 +9,11 @@
 //! * [`write_mzml`] / [`write_indexed_mzml`] - convenience entry points
 //!   that wrap the canonical writer in `openmassspec-core`.
 //!
+//! Chromatograms: [`iter_chromatograms`](msc::SpectrumSource::iter_chromatograms)
+//! emits whole-run TIC and basepeak (BPC) traces built directly from the
+//! per-frame `Frames.SummedIntensities` / `Frames.MaxIntensity` columns (one
+//! point per frame). See [`chromatogram_records_for`].
+//!
 //! Frame -> spectrum projection:
 //!
 //! * **MS1 frames** (`msms_type == 0`): all mobility scans pooled into one
@@ -569,12 +574,91 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
     }
 }
 
+/// Build the whole-run chromatogram traces from the already-decoded per-frame
+/// `Frames` columns carried on `frames`.
+///
+/// Two traces are emitted, each a time series with one point per frame (in
+/// acquisition order) built purely from columns `Reader::frames` already
+/// SELECTs - no extra SQL, no peak decode:
+///
+/// * **TIC** - "total ion current chromatogram" (`MS:1000235`) from
+///   [`Frame::summed_intensities`] (`Frames.SummedIntensities`, the
+///   accumulation-normalized per-frame intensity sum documented in
+///   `docs/docs/format/01-tdf-sqlite-schema.md` and cross-checked against the
+///   decoded peak sum in `tests/roundtrip.rs`).
+/// * **BPC** - "basepeak chromatogram" (`MS:1000628`) from
+///   [`Frame::max_intensity`] (`Frames.MaxIntensity`, the most intense peak in
+///   the frame).
+///
+/// `Frame::time` is retention time in seconds, which is what
+/// [`msc::ChromatogramRecord::time_sec`] wants (the canonical writer converts
+/// to minutes for the mzML `time array` itself). A frame whose source column
+/// is absent (`None`) contributes no point; a trace with no points at all is
+/// omitted rather than emitted empty, so a bundle missing a column yields no
+/// misleading zero-length chromatogram - matching the writer's contract of
+/// only emitting `<chromatogramList>` when the source yields something.
+///
+/// SRM/PRM transition chromatograms are intentionally not produced here: that
+/// needs genuine per-target cross-frame aggregation of the decoded peak stream
+/// (see Sigilweaver/OpenTimsTDF#25), not just wiring of existing columns.
+fn chromatogram_records_for(frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
+    fn trace(frames: &[Frame], value_of: impl Fn(&Frame) -> Option<u64>) -> (Vec<f32>, Vec<f32>) {
+        let mut time_sec = Vec::new();
+        let mut intensity = Vec::new();
+        for f in frames {
+            if let Some(v) = value_of(f) {
+                time_sec.push(f.time as f32);
+                intensity.push(v as f32);
+            }
+        }
+        (time_sec, intensity)
+    }
+
+    let mut out: Vec<msc::ChromatogramRecord> = Vec::new();
+
+    let (tic_time, tic_int) = trace(frames, |f| f.summed_intensities);
+    if !tic_time.is_empty() {
+        out.push(msc::ChromatogramRecord {
+            index: out.len(),
+            id: "TIC".to_string(),
+            chromatogram_type: Some(msc::CvTerm::new(
+                "MS:1000235",
+                "total ion current chromatogram",
+            )),
+            precursor_mz: None,
+            product_mz: None,
+            time_sec: tic_time,
+            intensity: tic_int,
+        });
+    }
+
+    let (bpc_time, bpc_int) = trace(frames, |f| f.max_intensity);
+    if !bpc_time.is_empty() {
+        out.push(msc::ChromatogramRecord {
+            index: out.len(),
+            id: "BPC".to_string(),
+            chromatogram_type: Some(msc::CvTerm::new("MS:1000628", "basepeak chromatogram")),
+            precursor_mz: None,
+            product_mz: None,
+            time_sec: bpc_time,
+            intensity: bpc_int,
+        });
+    }
+
+    out
+}
+
 impl<'a> msc::SpectrumSource for TdfSource<'a> {
     fn run_metadata(&self) -> msc::RunMetadata {
         run_metadata_for(&self.metadata, &self.bundle_name)
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
         Box::new(frame_iter(self.reader, &self.frames, &self.calibration))
+    }
+    fn iter_chromatograms<'s>(
+        &'s mut self,
+    ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
+        Box::new(chromatogram_records_for(&self.frames).into_iter())
     }
 }
 
@@ -584,6 +668,11 @@ impl msc::SpectrumSource for OwnedTdfSource {
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
         Box::new(frame_iter(&self.reader, &self.frames, &self.calibration))
+    }
+    fn iter_chromatograms<'s>(
+        &'s mut self,
+    ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
+        Box::new(chromatogram_records_for(&self.frames).into_iter())
     }
 }
 
@@ -630,6 +719,7 @@ mod tests {
             mz_calibration_id: 1,
             accumulation_time: None,
             summed_intensities: None,
+            max_intensity: None,
         }
     }
 
@@ -877,5 +967,99 @@ mod tests {
             assert_eq!(cv.accession, acc, "wrong accession for {name:?}");
             assert_eq!(cv.name, term_name, "wrong CV name for {name:?}");
         }
+    }
+
+    fn frame_with_intensities(
+        id: u32,
+        time: f64,
+        summed_intensities: Option<u64>,
+        max_intensity: Option<u64>,
+    ) -> Frame {
+        Frame {
+            id,
+            time,
+            num_scans: 10,
+            num_peaks: 3,
+            tims_id: 0,
+            scan_mode: 0,
+            msms_type: 0,
+            mz_calibration_id: 1,
+            accumulation_time: None,
+            summed_intensities,
+            max_intensity,
+        }
+    }
+
+    #[test]
+    fn chromatogram_records_for_builds_tic_and_bpc_from_frame_columns() {
+        let frames = [
+            frame_with_intensities(1, 1.5, Some(100), Some(40)),
+            frame_with_intensities(2, 3.0, Some(250), Some(90)),
+        ];
+        let recs = chromatogram_records_for(&frames);
+        assert_eq!(recs.len(), 2, "expected a TIC and a BPC record");
+
+        let tic = &recs[0];
+        assert_eq!(tic.index, 0);
+        assert_eq!(tic.id, "TIC");
+        let tic_cv = tic.chromatogram_type.as_ref().expect("TIC CV term");
+        assert_eq!(tic_cv.accession, "MS:1000235");
+        assert_eq!(tic_cv.name, "total ion current chromatogram");
+        assert!(tic.precursor_mz.is_none());
+        assert!(tic.product_mz.is_none());
+        // Retention time carried through in seconds (not minutes).
+        assert_eq!(tic.time_sec, vec![1.5, 3.0]);
+        assert_eq!(tic.intensity, vec![100.0, 250.0]);
+
+        let bpc = &recs[1];
+        assert_eq!(bpc.index, 1);
+        assert_eq!(bpc.id, "BPC");
+        let bpc_cv = bpc.chromatogram_type.as_ref().expect("BPC CV term");
+        assert_eq!(bpc_cv.accession, "MS:1000628");
+        assert_eq!(bpc_cv.name, "basepeak chromatogram");
+        assert_eq!(bpc.time_sec, vec![1.5, 3.0]);
+        assert_eq!(bpc.intensity, vec![40.0, 90.0]);
+    }
+
+    #[test]
+    fn chromatogram_records_for_skips_frames_missing_a_column_keeping_arrays_parallel() {
+        // Middle frame has no SummedIntensities and no MaxIntensity: it must
+        // contribute no point to either trace, and the two arrays stay
+        // parallel (one time per intensity).
+        let frames = [
+            frame_with_intensities(1, 1.0, Some(10), Some(5)),
+            frame_with_intensities(2, 2.0, None, None),
+            frame_with_intensities(3, 3.0, Some(30), Some(15)),
+        ];
+        let recs = chromatogram_records_for(&frames);
+        assert_eq!(recs.len(), 2);
+        assert_eq!(recs[0].time_sec, vec![1.0, 3.0]);
+        assert_eq!(recs[0].intensity, vec![10.0, 30.0]);
+        assert_eq!(recs[1].time_sec, vec![1.0, 3.0]);
+        assert_eq!(recs[1].intensity, vec![5.0, 15.0]);
+    }
+
+    #[test]
+    fn chromatogram_records_for_omits_a_trace_with_no_points() {
+        // SummedIntensities present on every frame but MaxIntensity absent
+        // (e.g. an older schema without the column): only the TIC is emitted,
+        // and it keeps index 0 - no empty BPC record is produced.
+        let frames = [
+            frame_with_intensities(1, 1.0, Some(10), None),
+            frame_with_intensities(2, 2.0, Some(20), None),
+        ];
+        let recs = chromatogram_records_for(&frames);
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].id, "TIC");
+        assert_eq!(recs[0].index, 0);
+    }
+
+    #[test]
+    fn chromatogram_records_for_empty_when_no_columns_populated() {
+        let frames = [
+            frame_with_intensities(1, 1.0, None, None),
+            frame_with_intensities(2, 2.0, None, None),
+        ];
+        assert!(chromatogram_records_for(&frames).is_empty());
     }
 }
