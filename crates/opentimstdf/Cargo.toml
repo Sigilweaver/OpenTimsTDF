@@ -17,6 +17,6 @@ unsafe_code = "forbid"
 
 [dependencies]
 thiserror = "2"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 zstd = "0.13"
 openmassspec-core = { workspace = true }
