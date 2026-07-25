@@ -301,6 +301,8 @@ fn build_pasef_ms2(
         precursor_native_id: tdf_prec.map(|p| format!("frame={} scan=1", p.parent_frame_id)),
         activation: Some(msc::Activation::HCD),
         analyzer: Some(msc::Analyzer::TOFMS),
+        // CCS derivation from inv_mobility is tracked separately, #14.
+        ccs: None,
     });
     msc::SpectrumRecord {
         index: (scan_number as usize).saturating_sub(1),
@@ -365,6 +367,8 @@ fn build_dia_ms2(
         precursor_native_id: None,
         activation: Some(msc::Activation::HCD),
         analyzer: Some(msc::Analyzer::TOFMS),
+        // CCS derivation from inv_mobility is tracked separately, #14.
+        ccs: None,
     });
     msc::SpectrumRecord {
         index: (scan_number as usize).saturating_sub(1),
@@ -551,6 +555,7 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
         source_file_format: source_file_format_cv(),
         native_id_format: native_id_format_cv(),
         instrument: instrument_cv(meta),
+        instrument_serial_number: None,
         software_name: SOFTWARE_NAME.into(),
         software_version: SOFTWARE_VERSION.into(),
         // `Metadata::acquisition_date_time` is read straight from the
@@ -566,6 +571,7 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
             .filter(|s| is_rfc3339(s))
             .map(str::to_string),
         mobility_array_kind: Some(msc::MobilityArrayKind::InverseReducedVsPerCm2),
+        analyzers: Vec::new(),
     }
 }
 
