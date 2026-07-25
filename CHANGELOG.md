@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-25
+
 ### Fixed
 
 - `openmassspec-core`'s declared minimum version in `Cargo.toml` was still
@@ -15,6 +17,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   minimum that can't compile - a `cargo update -Z minimal-versions` or an
   explicit `=1.0.0`/`=1.1.0` pin from a downstream consumer would fail.
   Bumped the declared minimum to `"1.2.0"` to match.
+- Adapted to `openmassspec-core` 1.3.0's new `PrecursorInfo::ccs` and
+  `RunMetadata::analyzers`/`instrument_serial_number` fields (defaulted,
+  as none of the three are decoded here - CCS derivation from the
+  already-exposed `inv_mobility` is tracked separately in #14).
 
 ## [1.3.0] - 2026-07-15
 
