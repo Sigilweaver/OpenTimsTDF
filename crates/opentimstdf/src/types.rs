@@ -18,6 +18,9 @@ pub struct Frame {
     /// Raw sum of decoded intensities divided by (AccumulationTime/100).
     /// See SPEC §2.2 for the normalization formula.
     pub summed_intensities: Option<u64>,
+    /// Most intense peak in the frame (`Frames.MaxIntensity`). `None` when the
+    /// column is absent. Used to build a basepeak chromatogram.
+    pub max_intensity: Option<u64>,
 }
 
 /// One decoded peak.
