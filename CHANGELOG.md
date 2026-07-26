@@ -21,8 +21,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the Python `Frame`). A trace whose source column is absent on every frame
   is omitted rather than emitted empty. SRM/PRM transition chromatograms
   are intentionally left out: they need genuine per-target cross-frame
-  aggregation of the decoded peak stream, not just column wiring. Closes
-  #25. Contributed by @Nabejo.
+  aggregation of the decoded peak stream, not just column wiring; tracked
+  as a rescoped #25. Contributed by @Nabejo.
 
 ## [1.3.1] - 2026-07-25
 
