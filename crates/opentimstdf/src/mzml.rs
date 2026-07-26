@@ -12,7 +12,10 @@
 //! Chromatograms: [`iter_chromatograms`](msc::SpectrumSource::iter_chromatograms)
 //! emits whole-run TIC and basepeak (BPC) traces built directly from the
 //! per-frame `Frames.SummedIntensities` / `Frames.MaxIntensity` columns (one
-//! point per frame). See [`chromatogram_records_for`].
+//! point per frame), plus one SRM/PRM trace per scheduled `PrmTarget` built by
+//! decoding and summing prm-PASEF (`msms_type == 10`) frames restricted to
+//! that target's scan-number range. See [`chromatogram_records_for`] and
+//! [`srm_chromatograms_for`].
 //!
 //! Frame -> spectrum projection:
 //!
@@ -44,7 +47,8 @@ use openmassspec_core as msc;
 
 use crate::error::Result;
 use crate::{
-    Calibration, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor as TdfPrecursor, Reader,
+    Calibration, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor as TdfPrecursor,
+    PrmTarget, Reader,
 };
 
 const SOFTWARE_NAME: &str = "opentimstdf";
@@ -604,9 +608,9 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
 /// misleading zero-length chromatogram - matching the writer's contract of
 /// only emitting `<chromatogramList>` when the source yields something.
 ///
-/// SRM/PRM transition chromatograms are intentionally not produced here: that
-/// needs genuine per-target cross-frame aggregation of the decoded peak stream
-/// (see Sigilweaver/OpenTimsTDF#25), not just wiring of existing columns.
+/// SRM/PRM transition chromatograms need genuine per-target cross-frame
+/// aggregation of the decoded peak stream rather than wiring of existing
+/// columns, and are built separately by [`srm_chromatograms_for`].
 fn chromatogram_records_for(frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
     fn trace(frames: &[Frame], value_of: impl Fn(&Frame) -> Option<u64>) -> (Vec<f32>, Vec<f32>) {
         let mut time_sec = Vec::new();
@@ -654,6 +658,135 @@ fn chromatogram_records_for(frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
     out
 }
 
+/// Sum the intensity of `peaks` whose mobility scan number falls in
+/// `[scan_lo, scan_hi)`. Returns `0.0` (not `None`) when nothing is in
+/// range - unlike a missing `Frames` column, a target genuinely having no
+/// signal on a given prm-PASEF frame is real data, not absence of it, so
+/// [`srm_chromatograms_for`] keeps the point rather than dropping it.
+fn sum_intensity_in_range(peaks: &[Peak], scan_lo: u32, scan_hi: u32) -> f64 {
+    peaks
+        .iter()
+        .filter(|p| p.scan >= scan_lo && p.scan < scan_hi)
+        .map(|p| p.intensity as f64)
+        .sum()
+}
+
+/// Build one SRM-shaped [`msc::ChromatogramRecord`] for `target` from an
+/// already-accumulated `(time_sec, intensity)` series. `index` is left at
+/// `0`; callers renumber after concatenating with the TIC/BPC traces so the
+/// whole `<chromatogramList>` gets contiguous indices (see
+/// [`chromatogram_records_for_source`]).
+///
+/// `precursor_mz` is [`PrmTarget::monoisotopic_mz`] - the single scheduled
+/// per-target value from `PrmTargets`, stable across every frame the target
+/// appears in (as opposed to `PrmFrameMsMsInfo::isolation_mz`, which is
+/// recorded per frame and is redundant with it in the observed corpus).
+///
+/// `product_mz` is left `None`. prm-PASEF isolates one precursor per target
+/// and records a full fragment-ion MS2 scan over the downstream m/z range
+/// (`docs/docs/format/05-instrument-tables.md`'s `PrmFrameMsMsInfo` section
+/// documents `IsolationMz`/`IsolationWidth` as describing the *precursor*
+/// isolation window only) - unlike a triple-quadrupole SRM/MRM transition,
+/// the TDF schema records no discrete product-ion m/z to report here, and
+/// clean-room correctness means not inventing one.
+fn build_srm_record(
+    target: &PrmTarget,
+    time_sec: Vec<f32>,
+    intensity: Vec<f32>,
+) -> msc::ChromatogramRecord {
+    msc::ChromatogramRecord {
+        index: 0,
+        id: format!("SRM_{}", target.id),
+        chromatogram_type: Some(msc::CvTerm::new(
+            "MS:1001473",
+            "selected reaction monitoring chromatogram",
+        )),
+        precursor_mz: Some(target.monoisotopic_mz),
+        product_mz: None,
+        time_sec,
+        intensity,
+    }
+}
+
+/// Build one SRM/PRM chromatogram trace per scheduled `PrmTarget`.
+///
+/// Walks every `msms_type == 10` (prm-PASEF) frame in `frames`, in order,
+/// and for each one:
+///
+/// 1. Looks up that frame's `PrmFrameMsMsInfo` rows (one per active target on
+///    that frame) via [`Reader::prm_msms_info_for_frame`].
+/// 2. Decodes the frame's peaks via [`Reader::decode_peaks`] - the same
+///    per-frame decode path `iter_spectra` uses for every other frame kind.
+/// 3. For each row, sums the decoded intensity restricted to that row's
+///    `[scan_num_begin, scan_num_end)` mobility range
+///    ([`sum_intensity_in_range`]) and appends `(frame.time, sum)` to that
+///    target's running series.
+///
+/// A frame that fails to decode, or whose `PrmFrameMsMsInfo` lookup fails or
+/// comes back empty, is skipped - matching [`spectra_for_frame`]'s
+/// silent-skip contract for a single bad frame. A target that never appears
+/// in any `PrmFrameMsMsInfo` row (e.g. an unused entry in a shared target
+/// list) is omitted from the output entirely, rather than emitted with an
+/// empty trace - the same no-empty-chromatogram contract
+/// [`chromatogram_records_for`] applies to TIC/BPC.
+///
+/// Target iteration order is by `PrmTargets.Id` ascending (a `BTreeMap` key),
+/// which is deterministic but otherwise arbitrary; per-target point order is
+/// frame-acquisition order, since `frames` itself is walked in that order.
+fn srm_chromatograms_for(reader: &Reader, frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
+    let mut per_target: std::collections::BTreeMap<u32, (Vec<f32>, Vec<f32>)> =
+        std::collections::BTreeMap::new();
+
+    for frame in frames {
+        if frame.msms_type != 10 {
+            continue;
+        }
+        let Ok(infos) = reader.prm_msms_info_for_frame(frame.id) else {
+            continue;
+        };
+        if infos.is_empty() {
+            continue;
+        }
+        let Ok(peaks) = reader.decode_peaks(frame) else {
+            continue;
+        };
+        for info in &infos {
+            let sum = sum_intensity_in_range(&peaks, info.scan_num_begin, info.scan_num_end);
+            let series = per_target.entry(info.target_id).or_default();
+            series.0.push(frame.time as f32);
+            series.1.push(sum as f32);
+        }
+    }
+
+    let mut out = Vec::with_capacity(per_target.len());
+    for (target_id, (time_sec, intensity)) in per_target {
+        let Ok(Some(target)) = reader.prm_target(target_id) else {
+            continue;
+        };
+        out.push(build_srm_record(&target, time_sec, intensity));
+    }
+    out
+}
+
+/// Full chromatogram list for [`TdfSource`]/[`OwnedTdfSource`]: TIC and BPC
+/// (from [`chromatogram_records_for`]) followed by one SRM/PRM trace per
+/// scheduled target (from [`srm_chromatograms_for`]), reindexed into one
+/// contiguous 0-based sequence across the combined list - mzML's
+/// `<chromatogramList>` expects each `<chromatogram>`'s `index` attribute to
+/// be unique and contiguous across the whole document, not just within one
+/// trace family.
+fn chromatogram_records_for_source(
+    reader: &Reader,
+    frames: &[Frame],
+) -> Vec<msc::ChromatogramRecord> {
+    let mut out = chromatogram_records_for(frames);
+    out.extend(srm_chromatograms_for(reader, frames));
+    for (i, rec) in out.iter_mut().enumerate() {
+        rec.index = i;
+    }
+    out
+}
+
 impl<'a> msc::SpectrumSource for TdfSource<'a> {
     fn run_metadata(&self) -> msc::RunMetadata {
         run_metadata_for(&self.metadata, &self.bundle_name)
@@ -664,7 +797,7 @@ impl<'a> msc::SpectrumSource for TdfSource<'a> {
     fn iter_chromatograms<'s>(
         &'s mut self,
     ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
-        Box::new(chromatogram_records_for(&self.frames).into_iter())
+        Box::new(chromatogram_records_for_source(self.reader, &self.frames).into_iter())
     }
 }
 
@@ -678,7 +811,7 @@ impl msc::SpectrumSource for OwnedTdfSource {
     fn iter_chromatograms<'s>(
         &'s mut self,
     ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
-        Box::new(chromatogram_records_for(&self.frames).into_iter())
+        Box::new(chromatogram_records_for_source(&self.reader, &self.frames).into_iter())
     }
 }
 
@@ -1067,5 +1200,93 @@ mod tests {
             frame_with_intensities(2, 2.0, None, None),
         ];
         assert!(chromatogram_records_for(&frames).is_empty());
+    }
+
+    #[test]
+    fn sum_intensity_in_range_includes_low_bound_excludes_high_bound() {
+        let peaks = [
+            Peak {
+                scan: 4,
+                tof: 100,
+                intensity: 10,
+            },
+            Peak {
+                scan: 5,
+                tof: 100,
+                intensity: 20,
+            },
+            Peak {
+                scan: 9,
+                tof: 100,
+                intensity: 40,
+            },
+            Peak {
+                scan: 10,
+                tof: 100,
+                intensity: 80,
+            },
+        ];
+        // [5, 10): includes scan 5 and 9, excludes 4 and 10.
+        assert_eq!(sum_intensity_in_range(&peaks, 5, 10), 60.0);
+    }
+
+    #[test]
+    fn sum_intensity_in_range_zero_when_nothing_in_range() {
+        let peaks = [Peak {
+            scan: 1,
+            tof: 100,
+            intensity: 10,
+        }];
+        // A target with genuinely no signal on a frame gets a real 0.0, not
+        // a dropped point - distinct from chromatogram_records_for's
+        // missing-column contract.
+        assert_eq!(sum_intensity_in_range(&peaks, 5, 10), 0.0);
+    }
+
+    #[test]
+    fn sum_intensity_in_range_empty_peaks_is_zero() {
+        assert_eq!(sum_intensity_in_range(&[], 0, 100), 0.0);
+    }
+
+    fn sample_prm_target() -> PrmTarget {
+        PrmTarget {
+            id: 42,
+            external_id: "PEPTIDE_A".into(),
+            time: 12.3,
+            one_over_k0: 0.85,
+            monoisotopic_mz: 524.3,
+            charge: 2,
+            description: String::new(),
+        }
+    }
+
+    #[test]
+    fn build_srm_record_wires_up_cv_term_and_precursor_mz_no_product_mz() {
+        let target = sample_prm_target();
+        let rec = build_srm_record(&target, vec![1.0, 2.0], vec![100.0, 200.0]);
+
+        assert_eq!(rec.id, "SRM_42");
+        let cv = rec.chromatogram_type.as_ref().expect("SRM CV term present");
+        assert_eq!(cv.accession, "MS:1001473");
+        assert_eq!(cv.name, "selected reaction monitoring chromatogram");
+        assert_eq!(rec.precursor_mz, Some(524.3));
+        // No discrete product ion m/z exists in the TDF schema for
+        // prm-PASEF (full fragment-ion scan, not a triple-quad transition) -
+        // see build_srm_record's doc comment.
+        assert!(rec.product_mz.is_none());
+        assert_eq!(rec.time_sec, vec![1.0, 2.0]);
+        assert_eq!(rec.intensity, vec![100.0, 200.0]);
+    }
+
+    #[test]
+    fn build_srm_record_id_is_unique_per_target_id() {
+        let mut a = sample_prm_target();
+        a.id = 1;
+        let mut b = sample_prm_target();
+        b.id = 2;
+        assert_ne!(
+            build_srm_record(&a, vec![], vec![]).id,
+            build_srm_record(&b, vec![], vec![]).id
+        );
     }
 }
