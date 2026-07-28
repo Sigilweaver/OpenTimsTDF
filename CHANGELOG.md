@@ -19,10 +19,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `Frames.MaxIntensity`. `MaxIntensity` is a new additive column on the
   `Frames` SELECT and a new `Frame::max_intensity` field (also exposed on
   the Python `Frame`). A trace whose source column is absent on every frame
-  is omitted rather than emitted empty. SRM/PRM transition chromatograms
-  are intentionally left out: they need genuine per-target cross-frame
-  aggregation of the decoded peak stream, not just column wiring; tracked
-  as a rescoped #25. Contributed by @Nabejo.
+  is omitted rather than emitted empty. Contributed by @Nabejo.
+- `iter_chromatograms` now also emits one SRM/PRM chromatogram trace
+  ("selected reaction monitoring chromatogram", `MS:1001473`) per scheduled
+  `PrmTarget`, completing the chromatogram work scoped out of the entry
+  above (rescoped #25; distinct from #13, which is about the prm-PASEF
+  spectrum projection, not the chromatogram trace). For each target, every
+  `msms_type == 10` (prm-PASEF) frame is decoded via the same per-frame
+  peak decode `iter_spectra` already uses, the decoded intensity is summed
+  restricted to that target's `PrmFrameMsMsInfo` scan-number range, and one
+  point is appended per frame - a target with a genuine zero-intensity
+  frame keeps that point (it is real data, unlike a frame missing a
+  `Frames` column), while a target absent from every `PrmFrameMsMsInfo` row
+  is omitted rather than emitted with an empty trace. `precursor_mz` is the
+  target's scheduled `PrmTargets.MonoisotopicMz`; `product_mz` is left
+  unset because prm-PASEF records a full fragment-ion scan per precursor
+  rather than a discrete triple-quadrupole product-ion transition, and the
+  TDF schema has no product-ion m/z field to report. Contributed by
+  @Nabejo.
 
 ## [1.3.1] - 2026-07-25
 
