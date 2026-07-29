@@ -567,6 +567,18 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
         instrument_serial_number: None,
         software_name: SOFTWARE_NAME.into(),
         software_version: SOFTWARE_VERSION.into(),
+        // `Metadata::acquisition_software`/`acquisition_software_version` are
+        // read straight from the `AcquisitionSoftware`/`AcquisitionSoftwareVersion`
+        // rows in `analysis.tdf`'s GlobalMetadata table (see `Reader::metadata`
+        // in reader.rs), defaulting to an empty string when the key is absent.
+        // Treat empty as "not present" rather than surfacing an empty
+        // `Some("")` in the mzML output.
+        acquisition_software_name: Some(meta.acquisition_software.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+        acquisition_software_version: Some(meta.acquisition_software_version.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
         // `Metadata::acquisition_date_time` is read straight from the
         // `AcquisitionDateTime` row in `analysis.tdf`'s GlobalMetadata table
         // (see `Reader::metadata` in reader.rs) and documented there as an
@@ -1072,6 +1084,24 @@ mod tests {
         let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
         let rm = run_metadata_for(&meta, "bundle.d");
         assert_eq!(rm.start_timestamp, None);
+    }
+
+    #[test]
+    fn run_metadata_for_wires_up_acquisition_software() {
+        let meta = sample_metadata(None);
+        let rm = run_metadata_for(&meta, "bundle.d");
+        assert_eq!(rm.acquisition_software_name.as_deref(), Some("timsControl"));
+        assert_eq!(rm.acquisition_software_version.as_deref(), Some("2.0.18"));
+    }
+
+    #[test]
+    fn run_metadata_for_acquisition_software_none_when_empty() {
+        let mut meta = sample_metadata(None);
+        meta.acquisition_software = String::new();
+        meta.acquisition_software_version = String::new();
+        let rm = run_metadata_for(&meta, "bundle.d");
+        assert_eq!(rm.acquisition_software_name, None);
+        assert_eq!(rm.acquisition_software_version, None);
     }
 
     // Regression test: the lookup table in `instrument_cv` previously
