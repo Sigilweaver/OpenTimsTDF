@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Adapted to `openmassspec-core` 1.4.0's new `RunMetadata::acquisition_software_name`
+  and `acquisition_software_version` fields. Unlike the 1.3.0 adaptation,
+  these aren't defaulted to `None`: `Reader::metadata` already parses the
+  `AcquisitionSoftware`/`AcquisitionSoftwareVersion` rows out of
+  `analysis.tdf`'s `GlobalMetadata` table for the crate's own `Metadata`
+  type, so `run_metadata_for` now wires those through (empty string, the
+  default when the key is absent from a bundle, is treated as `None`
+  rather than `Some("")`). Closes #31.
+
 ### Added
 
 - mzML export now emits a `<chromatogramList>` via
