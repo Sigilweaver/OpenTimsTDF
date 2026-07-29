@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-07-29
+
 ### Fixed
 
 - Adapted to `openmassspec-core` 1.4.0's new `RunMetadata::acquisition_software_name`
