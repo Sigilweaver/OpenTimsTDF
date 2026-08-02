@@ -13,6 +13,14 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Same Bruker timsTOF .d bundle validate-mzml.yml downloads (~90 MB
+  # zipped), cached under corpus/ so crates/opentimstdf/tests/conformance.rs
+  # can exercise a real decode path in CI instead of always skipping - see
+  # Sigilweaver/OpenTimsTDF#35. Keep BRUKER_BUNDLE in sync with
+  # conformance.rs's bundle_dir() candidates.
+  BRUKER_ZIP_URL: >-
+    https://ftp.pride.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_BUNDLE: NQO1-F107C_coi-N2-P_200-0C_3996.d
 
 jobs:
   test:
@@ -41,6 +49,19 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Download corpus fixture for conformance tests
+        # Downloading the ~90 MB zip on every OS leg of the matrix would
+        # triple the cost of this fetch for no benefit (the conformance
+        # test's decode path isn't OS-specific), so only fetch it on Linux.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p corpus
+          wget -q --user-agent="OpenTimsTDF-CI/1.0" -O bruker.d.zip "$BRUKER_ZIP_URL"
+          echo "Downloaded $(du -sh bruker.d.zip | cut -f1) zip"
+          unzip -q -d corpus bruker.d.zip
+          test -d "corpus/$BRUKER_BUNDLE" || (echo "expected bundle dir corpus/$BRUKER_BUNDLE missing" && exit 1)
+          rm bruker.d.zip
 
       - name: cargo test
         run: cargo test --workspace --all-targets

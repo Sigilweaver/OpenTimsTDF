@@ -6,6 +6,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- CI now downloads a small corpus fixture (the same PRIDE PXD036417
+  Bruker timsTOF `.d` bundle `validate-mzml` already uses) ahead of
+  `cargo test` on the Linux leg of the matrix, so
+  `crates/opentimstdf/tests/conformance.rs` exercises a real decode path
+  in CI instead of always skipping. Closes #35.
+
 ## [1.3.2] - 2026-07-29
 
 ### Fixed
