@@ -3,7 +3,7 @@ use crate::types::{Frame, Peak};
 /// Map a Frames row to a `Frame` struct.
 ///
 /// Column order must match the SELECT used in `Reader::frame()` and `Reader::frames()`:
-/// Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
+/// Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
 /// MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
 pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame> {
     Ok(Frame {
@@ -12,13 +12,36 @@ pub(crate) fn frame_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame>
         num_scans: row.get(2)?,
         num_peaks: row.get(3)?,
         tims_id: row.get::<_, i64>(4)? as u64,
-        scan_mode: row.get::<_, Option<i64>>(5)?.unwrap_or(0) as u32,
-        msms_type: row.get::<_, Option<i64>>(6)?.unwrap_or(0) as u32,
-        mz_calibration_id: row.get::<_, Option<i64>>(7)?.unwrap_or(1) as u32,
-        accumulation_time: row.get(8)?,
-        summed_intensities: row.get::<_, Option<i64>>(9)?.map(|v| v as u64),
-        max_intensity: row.get::<_, Option<i64>>(10)?.map(|v| v as u64),
+        polarity: row.get(5)?,
+        scan_mode: row.get::<_, Option<i64>>(6)?.unwrap_or(0) as u32,
+        msms_type: row.get::<_, Option<i64>>(7)?.unwrap_or(0) as u32,
+        mz_calibration_id: row.get::<_, Option<i64>>(8)?.unwrap_or(1) as u32,
+        accumulation_time: row.get(9)?,
+        summed_intensities: row.get::<_, Option<i64>>(10)?.map(|v| v as u64),
+        max_intensity: row.get::<_, Option<i64>>(11)?.map(|v| v as u64),
     })
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+
+    #[test]
+    fn frame_from_row_decodes_polarity_column() {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory database");
+        let frame = conn
+            .query_row(
+                "SELECT 7, 12.5, 10, 3, 42, '-', 8, 0, 1, NULL, NULL, NULL",
+                [],
+                frame_from_row,
+            )
+            .expect("frame row");
+
+        assert_eq!(frame.polarity, "-");
+        assert_eq!(frame.scan_mode, 8);
+        assert_eq!(frame.msms_type, 0);
+        assert_eq!(frame.mz_calibration_id, 1);
+    }
 }
 
 /// Caps a claimed read length against what a file could actually contain,

@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Frame polarity in Rust, Python, and mzML projection now comes directly from
+  `Frames.Polarity` instead of being inferred from `MzCalibration` ids.
+
+### Documentation
+
+- Clarified why mzML spectrum dispatch uses per-frame `MsMsType` rather than
+  acquisition-level `ScanMode`, and recorded the missing legacy
+  `MsMsType = 2` fixture and projection decision needed to extend dispatch.
+
 ### Added
 
 - CI now downloads a small corpus fixture (the same PRIDE PXD036417

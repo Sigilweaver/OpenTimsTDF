@@ -140,9 +140,9 @@ fn is_rfc3339(s: &str) -> bool {
 }
 
 fn polarity_for(frame: &Frame) -> Option<msc::Polarity> {
-    match frame.mz_calibration_id {
-        1 => Some(msc::Polarity::Positive),
-        2 => Some(msc::Polarity::Negative),
+    match frame.polarity.as_str() {
+        "+" => Some(msc::Polarity::Positive),
+        "-" => Some(msc::Polarity::Negative),
         _ => None,
     }
 }
@@ -865,6 +865,7 @@ mod tests {
             num_scans: 10,
             num_peaks: 3,
             tims_id: 0,
+            polarity: "+".to_owned(),
             scan_mode: msms_type,
             msms_type,
             mz_calibration_id: 1,
@@ -872,6 +873,18 @@ mod tests {
             summed_intensities: None,
             max_intensity: None,
         }
+    }
+
+    #[test]
+    fn polarity_uses_frames_polarity_not_calibration_id() {
+        let mut frame = sample_frame(0);
+        frame.polarity = "-".to_owned();
+        frame.mz_calibration_id = 1;
+        assert_eq!(polarity_for(&frame), Some(msc::Polarity::Negative));
+
+        frame.polarity = "+".to_owned();
+        frame.mz_calibration_id = 2;
+        assert_eq!(polarity_for(&frame), Some(msc::Polarity::Positive));
     }
 
     #[test]
@@ -1150,6 +1163,7 @@ mod tests {
             num_scans: 10,
             num_peaks: 3,
             tims_id: 0,
+            polarity: "+".to_owned(),
             scan_mode: 0,
             msms_type: 0,
             mz_calibration_id: 1,
