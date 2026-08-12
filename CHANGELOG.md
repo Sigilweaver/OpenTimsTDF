@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-08-12
+
 ### Fixed
 
 - Frame polarity in Rust, Python, and mzML projection now comes directly from
