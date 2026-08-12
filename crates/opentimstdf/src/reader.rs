@@ -235,7 +235,7 @@ impl Reader {
     pub fn frame(&self, frame_id: u32) -> Result<Frame> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
         let frame = conn.query_row(
-            "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
+            "SELECT Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames WHERE Id = ?1",
             [frame_id],
@@ -248,7 +248,7 @@ impl Reader {
     pub fn frames(&self) -> Result<Vec<Frame>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
         let mut stmt = conn.prepare(
-            "SELECT Id, Time, NumScans, NumPeaks, TimsId, ScanMode, MsMsType,
+            "SELECT Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames ORDER BY Id ASC",
         )?;

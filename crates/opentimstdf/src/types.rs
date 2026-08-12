@@ -7,6 +7,8 @@ pub struct Frame {
     pub num_scans: u32,
     pub num_peaks: u32,
     pub tims_id: u64,
+    /// Ion polarity from `Frames.Polarity` (`"+"` or `"-"`).
+    pub polarity: String,
     /// Scan mode: 0 = MS1, 8 = PASEF DDA, 9 = diaPASEF.
     pub scan_mode: u32,
     /// MS/MS type: 0 = MS1, 8 = PASEF MS2, 9 = diaPASEF MS2.

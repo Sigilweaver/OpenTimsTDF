@@ -70,6 +70,7 @@ struct Frame {
     num_peaks: u32,
     #[pyo3(get)]
     tims_id: u64,
+    polarity_symbol: String,
     #[pyo3(get)]
     scan_mode: u32,
     #[pyo3(get)]
@@ -86,15 +87,13 @@ struct Frame {
 
 #[pymethods]
 impl Frame {
-    /// Ion polarity derived from `mz_calibration_id`.
-    ///
-    /// Returns `"positive"` for calibration id 1 and `"negative"` for id 2.
-    /// Dual-polarity acquisitions use alternating calibration ids per frame.
+    /// Ion polarity read from `Frames.Polarity`.
     #[getter]
     fn polarity(&self) -> &'static str {
-        match self.mz_calibration_id {
-            2 => "negative",
-            _ => "positive",
+        match self.polarity_symbol.as_str() {
+            "-" => "negative",
+            "+" => "positive",
+            _ => "unknown",
         }
     }
 
@@ -114,6 +113,7 @@ impl From<RsFrame> for Frame {
             num_scans: f.num_scans,
             num_peaks: f.num_peaks,
             tims_id: f.tims_id,
+            polarity_symbol: f.polarity,
             scan_mode: f.scan_mode,
             msms_type: f.msms_type,
             mz_calibration_id: f.mz_calibration_id,
@@ -533,6 +533,7 @@ impl Reader {
             num_scans: frame.num_scans,
             num_peaks: frame.num_peaks,
             tims_id: frame.tims_id,
+            polarity: frame.polarity_symbol.clone(),
             scan_mode: frame.scan_mode,
             msms_type: frame.msms_type,
             mz_calibration_id: frame.mz_calibration_id,
@@ -564,6 +565,7 @@ impl Reader {
             num_scans: frame.num_scans,
             num_peaks: frame.num_peaks,
             tims_id: frame.tims_id,
+            polarity: frame.polarity_symbol.clone(),
             scan_mode: frame.scan_mode,
             msms_type: frame.msms_type,
             mz_calibration_id: frame.mz_calibration_id,

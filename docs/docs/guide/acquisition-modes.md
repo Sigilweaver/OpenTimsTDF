@@ -9,6 +9,16 @@ OpenTimsTDF identifies them through the `Frames.ScanMode` / `MsMsType`
 columns and exposes the mode-specific metadata via dedicated reader
 methods.
 
+`ScanMode` describes the acquisition method, while `MsMsType` describes the
+role of an individual frame. They are not interchangeable: in the repository
+corpus, PASEF acquisitions contain MS1 frames with `ScanMode = 8` and
+`MsMsType = 0`. Spectrum projection therefore dispatches on `MsMsType` and
+keeps `ScanMode` as exposed acquisition metadata. The documented legacy
+`MsMsType = 2` has no fixture in the corpus, so projecting it requires a
+clean-room fixture containing that value plus a decision about its expected
+spectrum/precursor representation; until then it remains unsupported rather
+than being guessed from `ScanMode`.
+
 | Mode               | Detection                          | Reader entry point |
 | ------------------ | ---------------------------------- | ------------------ |
 | MS1 only           | `MsMsType = 0`                     | `reader.frame(id)` |
