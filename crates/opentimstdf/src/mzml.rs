@@ -243,6 +243,8 @@ fn build_ms1(
         inv_mobility: None,
     });
     msc::SpectrumRecord {
+        extra: ::std::collections::BTreeMap::new(),
+        acquisition_event_id: None,
         index: (scan_number as usize).saturating_sub(1),
         scan_number,
         native_id: format!("frame={} scan=1", frame.id),
@@ -314,6 +316,8 @@ fn build_pasef_ms2(
         ccs: None,
     });
     msc::SpectrumRecord {
+        extra: ::std::collections::BTreeMap::new(),
+        acquisition_event_id: None,
         index: (scan_number as usize).saturating_sub(1),
         scan_number,
         native_id: format!(
@@ -380,6 +384,8 @@ fn build_dia_ms2(
         ccs: None,
     });
     msc::SpectrumRecord {
+        extra: ::std::collections::BTreeMap::new(),
+        acquisition_event_id: None,
         index: (scan_number as usize).saturating_sub(1),
         scan_number,
         native_id: format!(
@@ -560,6 +566,7 @@ fn frame_iter<'s>(
 
 fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
     msc::RunMetadata {
+        extra: ::std::collections::BTreeMap::new(),
         source_file_name: bundle_name.to_string(),
         source_file_format: source_file_format_cv(),
         native_id_format: native_id_format_cv(),

@@ -8,6 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.3.3] - 2026-08-12
 
+### Changed
+
+- Adopt `openmassspec-core` 1.5.0. The new `SpectrumRecord`/`RunMetadata`
+  `extra` and `acquisition_event_id` fields are defaulted (empty / `None`);
+  no field is populated yet, so output is unchanged.
+
 ### Fixed
 
 - Frame polarity in Rust, Python, and mzML projection now comes directly from
