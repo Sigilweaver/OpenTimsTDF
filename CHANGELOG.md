@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Debug-only cross-check in mzML projection (`spectra_for_frame`) asserting
+  that `Frame::scan_mode` (`Frames.ScanMode`) agrees with `Frame::msms_type`
+  (`Frames.MsMsType`), accounting for the one documented divergence
+  (`MsMsType`'s legacy value `2`, which has no `ScanMode` counterpart).
+  `scan_mode` is decoded and exposed via the Python bindings but was
+  otherwise unused internally; rather than remove it (a public-API break),
+  it's now used as an assertion-only safety net. No behavior change (#28).
+
 ## [1.3.3] - 2026-08-12
 
 ### Changed
