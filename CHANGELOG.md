@@ -6,15 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Added
+### Documentation
 
-- Debug-only cross-check in mzML projection (`spectra_for_frame`) asserting
-  that `Frame::scan_mode` (`Frames.ScanMode`) agrees with `Frame::msms_type`
-  (`Frames.MsMsType`), accounting for the one documented divergence
-  (`MsMsType`'s legacy value `2`, which has no `ScanMode` counterpart).
-  `scan_mode` is decoded and exposed via the Python bindings but was
-  otherwise unused internally; rather than remove it (a public-API break),
-  it's now used as an assertion-only safety net. No behavior change (#28).
+- Recorded the outcome of the `Frames.ScanMode` vs `Frames.MsMsType`
+  investigation (#28): the two columns are independent, not near-duplicates.
+  `ScanMode` is the run's acquisition method (constant per run), while
+  `MsMsType` is each frame's MS role, so they diverge on every MS1 survey
+  frame of a PASEF/dia run (e.g. corpus Frame 1: `ScanMode = 8`,
+  `MsMsType = 0`). `scan_mode` stays decoded and exposed via the Python
+  bindings but is legitimately not used for per-frame dispatch. No behavior
+  change.
 
 ## [1.3.3] - 2026-08-12
 

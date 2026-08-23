@@ -480,29 +480,23 @@ pub struct OwnedTdfSource {
     frames: Vec<Frame>,
 }
 
-/// Cross-check `Frame::scan_mode` against `Frame::msms_type`.
-///
-/// `Frames.ScanMode` and `Frames.MsMsType` are two distinct columns with
-/// almost the same value space (see
-/// `docs/docs/format/01-tdf-sqlite-schema.md`): `0` = MS1, `8` = PASEF,
-/// `9` = diaPASEF, `10` = PRM in both. The one documented divergence is
-/// `MsMsType`'s legacy value `2` (MRM/PRM), which has no `ScanMode`
-/// counterpart. Dispatch in [`spectra_for_frame`] is driven entirely by
-/// `msms_type`; this assertion is a cross-check that the two columns
-/// haven't silently diverged in a corpus bundle in some other, undocumented
-/// way (see issue #28 - `scan_mode` is decoded and exposed to Python but
-/// otherwise unused internally). Debug-only: not a runtime invariant we
-/// want to enforce, or pay for, in release builds.
-fn debug_assert_scan_mode_matches_msms_type(frame: &Frame) {
-    debug_assert!(
-        frame.msms_type == 2 || frame.scan_mode == frame.msms_type,
-        "Frame {}: scan_mode ({}) and msms_type ({}) diverge outside the \
-         documented legacy MsMsType=2 (MRM/PRM) case",
-        frame.id,
-        frame.scan_mode,
-        frame.msms_type
-    );
-}
+// `Frame::scan_mode` (`Frames.ScanMode`) is deliberately not consulted in
+// [`spectra_for_frame`]; dispatch is driven entirely by `msms_type`
+// (`Frames.MsMsType`). Issue #28 asked whether `scan_mode` is redundant
+// with `msms_type` and could be cross-checked against it. It cannot: the
+// two columns are independent, not near-duplicates.
+//
+// `ScanMode` reports the run's acquisition method (constant across the run:
+// `8` = PASEF, `9` = diaPASEF, `10` = PRM), while `MsMsType` reports each
+// frame's MS role (`0` = MS1, `8` = PASEF MS2, `9` = diaPASEF, `10` =
+// prm-PASEF, `2` = legacy MRM/PRM). They therefore diverge on every MS1
+// survey frame of a PASEF/dia run: the conformance corpus bundle
+// `NQO1-F107C_coi-N2-P_200-0C_3996.d` has Frame 1 with `ScanMode = 8`
+// (PASEF acquisition) and `MsMsType = 0` (MS1). A cross-check assertion was
+// tried here (see git history) but is invalid for exactly this reason.
+// `scan_mode` remains decoded and exposed via the Python bindings as the
+// per-run acquisition-mode tag; it just carries no per-frame dispatch
+// information. See `docs/docs/format/01-tdf-sqlite-schema.md`.
 
 /// Project one frame into zero or more spectra, incrementing `scan_counter`
 /// for each spectrum produced. Any decode failure - the frame's peaks, its
@@ -517,7 +511,6 @@ fn spectra_for_frame(
     calibration: &Calibration,
     scan_counter: &mut u32,
 ) -> Vec<msc::SpectrumRecord> {
-    debug_assert_scan_mode_matches_msms_type(frame);
     let Ok(peaks) = reader.decode_peaks(frame) else {
         return Vec::new();
     };
@@ -905,35 +898,6 @@ mod tests {
             summed_intensities: None,
             max_intensity: None,
         }
-    }
-
-    #[test]
-    fn scan_mode_cross_check_passes_when_columns_agree() {
-        for v in [0u32, 8, 9, 10] {
-            let mut frame = sample_frame(v);
-            frame.scan_mode = v;
-            debug_assert_scan_mode_matches_msms_type(&frame);
-        }
-    }
-
-    #[test]
-    fn scan_mode_cross_check_allows_documented_legacy_msms_type_2() {
-        // MsMsType = 2 (legacy MRM/PRM) has no ScanMode counterpart per
-        // docs/docs/format/01-tdf-sqlite-schema.md, so any scan_mode value
-        // is accepted for this one documented divergence.
-        for scan_mode in [0u32, 8, 9, 10] {
-            let mut frame = sample_frame(2);
-            frame.scan_mode = scan_mode;
-            debug_assert_scan_mode_matches_msms_type(&frame);
-        }
-    }
-
-    #[test]
-    #[should_panic(expected = "diverge outside the documented legacy MsMsType=2")]
-    fn scan_mode_cross_check_panics_on_undocumented_divergence() {
-        let mut frame = sample_frame(8);
-        frame.scan_mode = 9; // Neither equal nor the documented msms_type == 2 case.
-        debug_assert_scan_mode_matches_msms_type(&frame);
     }
 
     #[test]
