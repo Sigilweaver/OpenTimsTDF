@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-28
+
 ### Added
 
 - Python can stream complete canonical spectrum records and read canonical
