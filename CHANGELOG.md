@@ -12,6 +12,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   run metadata and chromatograms. Namespaced extras preserve decoded frame
   and TDF schema fields in the shared records.
 
+### Changed
+
+- **Breaking (Rust):** adopts `openmassspec-core` 2.0.0 (arrow 60). Python
+  users are unaffected.
+- `zstd` 0.13 -> 0.14.
+
 ### Documentation
 
 - Recorded the outcome of the `Frames.ScanMode` vs `Frames.MsMsType`
