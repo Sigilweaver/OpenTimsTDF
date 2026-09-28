@@ -496,7 +496,7 @@ fn spectra_for_frame(
     let Ok(peaks) = reader.decode_peaks(frame) else {
         return Vec::new();
     };
-    match frame.msms_type {
+    let mut records = match frame.msms_type {
         0 => {
             *scan_counter += 1;
             vec![build_ms1(*scan_counter, frame, &peaks, calibration)]
@@ -534,7 +534,50 @@ fn spectra_for_frame(
             out
         }
         _ => Vec::new(),
+    };
+    for record in &mut records {
+        record
+            .extra
+            .insert("opentimstdf.frame_id".into(), frame.id.to_string());
+        record
+            .extra
+            .insert("opentimstdf.tims_id".into(), frame.tims_id.to_string());
+        record
+            .extra
+            .insert("opentimstdf.num_scans".into(), frame.num_scans.to_string());
+        record
+            .extra
+            .insert("opentimstdf.num_peaks".into(), frame.num_peaks.to_string());
+        record
+            .extra
+            .insert("opentimstdf.polarity_symbol".into(), frame.polarity.clone());
+        record
+            .extra
+            .insert("opentimstdf.scan_mode".into(), frame.scan_mode.to_string());
+        record
+            .extra
+            .insert("opentimstdf.msms_type".into(), frame.msms_type.to_string());
+        record.extra.insert(
+            "opentimstdf.mz_calibration_id".into(),
+            frame.mz_calibration_id.to_string(),
+        );
+        if let Some(value) = frame.accumulation_time {
+            record
+                .extra
+                .insert("opentimstdf.accumulation_time".into(), value.to_string());
+        }
+        if let Some(value) = frame.summed_intensities {
+            record
+                .extra
+                .insert("opentimstdf.summed_intensities".into(), value.to_string());
+        }
+        if let Some(value) = frame.max_intensity {
+            record
+                .extra
+                .insert("opentimstdf.max_intensity".into(), value.to_string());
+        }
     }
+    records
 }
 
 /// Build a lazy, frame-at-a-time spectrum iterator. Decodes and projects
@@ -565,8 +608,28 @@ fn frame_iter<'s>(
 }
 
 fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
+    let mut extra = ::std::collections::BTreeMap::new();
+    extra.insert(
+        "opentimstdf.schema_version_major".into(),
+        meta.schema_version_major.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.schema_version_minor".into(),
+        meta.schema_version_minor.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.compression_type".into(),
+        meta.compression_type.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.instrument_name".into(),
+        meta.instrument_name.clone(),
+    );
+    if let Some(value) = &meta.acquisition_date_time {
+        extra.insert("opentimstdf.acquisition_date_time".into(), value.clone());
+    }
     msc::RunMetadata {
-        extra: ::std::collections::BTreeMap::new(),
+        extra,
         source_file_name: bundle_name.to_string(),
         source_file_format: source_file_format_cv(),
         native_id_format: native_id_format_cv(),

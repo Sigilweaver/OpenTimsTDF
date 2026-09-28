@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Python can stream complete canonical spectrum records and read canonical
+  run metadata and chromatograms. Namespaced extras preserve decoded frame
+  and TDF schema fields in the shared records.
+
 ## [1.3.3] - 2026-08-12
 
 ### Changed
