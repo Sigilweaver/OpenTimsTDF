@@ -480,6 +480,24 @@ pub struct OwnedTdfSource {
     frames: Vec<Frame>,
 }
 
+// `Frame::scan_mode` (`Frames.ScanMode`) is deliberately not consulted in
+// [`spectra_for_frame`]; dispatch is driven entirely by `msms_type`
+// (`Frames.MsMsType`). Issue #28 asked whether `scan_mode` is redundant
+// with `msms_type` and could be cross-checked against it. It cannot: the
+// two columns are independent, not near-duplicates.
+//
+// `ScanMode` reports the run's acquisition method (constant across the run:
+// `8` = PASEF, `9` = diaPASEF, `10` = PRM), while `MsMsType` reports each
+// frame's MS role (`0` = MS1, `8` = PASEF MS2, `9` = diaPASEF, `10` =
+// prm-PASEF, `2` = legacy MRM/PRM). They therefore diverge on every MS1
+// survey frame of a PASEF/dia run: the conformance corpus bundle
+// `NQO1-F107C_coi-N2-P_200-0C_3996.d` has Frame 1 with `ScanMode = 8`
+// (PASEF acquisition) and `MsMsType = 0` (MS1). A cross-check assertion was
+// tried here (see git history) but is invalid for exactly this reason.
+// `scan_mode` remains decoded and exposed via the Python bindings as the
+// per-run acquisition-mode tag; it just carries no per-frame dispatch
+// information. See `docs/docs/format/01-tdf-sqlite-schema.md`.
+
 /// Project one frame into zero or more spectra, incrementing `scan_counter`
 /// for each spectrum produced. Any decode failure - the frame's peaks, its
 /// PASEF info rows, or its diaPASEF windows - causes that frame to be

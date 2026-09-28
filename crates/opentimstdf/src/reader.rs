@@ -577,10 +577,9 @@ impl Reader {
         let mut raw_offsets = vec![0u8; offsets_table_len];
         read_at_exact(f, offsets_offset, &mut raw_offsets)?;
         let mut scan_offsets = Vec::with_capacity(scan_count as usize + 1);
-        for chunk in raw_offsets.chunks_exact(4) {
-            // chunks_exact(4) guarantees chunk.len() == 4
-            #[allow(clippy::unwrap_used)]
-            let o = u32::from_le_bytes(chunk.try_into().unwrap());
+        let (chunks, _) = raw_offsets.as_chunks::<4>();
+        for chunk in chunks {
+            let o = u32::from_le_bytes(*chunk);
             scan_offsets.push(u64::from(o).saturating_sub(compression_offset) as usize);
         }
 

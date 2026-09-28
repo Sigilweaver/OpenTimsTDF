@@ -12,6 +12,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   run metadata and chromatograms. Namespaced extras preserve decoded frame
   and TDF schema fields in the shared records.
 
+### Documentation
+
+- Recorded the outcome of the `Frames.ScanMode` vs `Frames.MsMsType`
+  investigation (#28): the two columns are independent, not near-duplicates.
+  `ScanMode` is the run's acquisition method (constant per run), while
+  `MsMsType` is each frame's MS role, so they diverge on every MS1 survey
+  frame of a PASEF/dia run (e.g. corpus Frame 1: `ScanMode = 8`,
+  `MsMsType = 0`). `scan_mode` stays decoded and exposed via the Python
+  bindings but is legitimately not used for per-frame dispatch. No behavior
+  change.
+
 ## [1.3.3] - 2026-08-12
 
 ### Changed
