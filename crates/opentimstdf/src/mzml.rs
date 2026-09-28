@@ -480,6 +480,24 @@ pub struct OwnedTdfSource {
     frames: Vec<Frame>,
 }
 
+// `Frame::scan_mode` (`Frames.ScanMode`) is deliberately not consulted in
+// [`spectra_for_frame`]; dispatch is driven entirely by `msms_type`
+// (`Frames.MsMsType`). Issue #28 asked whether `scan_mode` is redundant
+// with `msms_type` and could be cross-checked against it. It cannot: the
+// two columns are independent, not near-duplicates.
+//
+// `ScanMode` reports the run's acquisition method (constant across the run:
+// `8` = PASEF, `9` = diaPASEF, `10` = PRM), while `MsMsType` reports each
+// frame's MS role (`0` = MS1, `8` = PASEF MS2, `9` = diaPASEF, `10` =
+// prm-PASEF, `2` = legacy MRM/PRM). They therefore diverge on every MS1
+// survey frame of a PASEF/dia run: the conformance corpus bundle
+// `NQO1-F107C_coi-N2-P_200-0C_3996.d` has Frame 1 with `ScanMode = 8`
+// (PASEF acquisition) and `MsMsType = 0` (MS1). A cross-check assertion was
+// tried here (see git history) but is invalid for exactly this reason.
+// `scan_mode` remains decoded and exposed via the Python bindings as the
+// per-run acquisition-mode tag; it just carries no per-frame dispatch
+// information. See `docs/docs/format/01-tdf-sqlite-schema.md`.
+
 /// Project one frame into zero or more spectra, incrementing `scan_counter`
 /// for each spectrum produced. Any decode failure - the frame's peaks, its
 /// PASEF info rows, or its diaPASEF windows - causes that frame to be
@@ -496,7 +514,7 @@ fn spectra_for_frame(
     let Ok(peaks) = reader.decode_peaks(frame) else {
         return Vec::new();
     };
-    match frame.msms_type {
+    let mut records = match frame.msms_type {
         0 => {
             *scan_counter += 1;
             vec![build_ms1(*scan_counter, frame, &peaks, calibration)]
@@ -534,7 +552,50 @@ fn spectra_for_frame(
             out
         }
         _ => Vec::new(),
+    };
+    for record in &mut records {
+        record
+            .extra
+            .insert("opentimstdf.frame_id".into(), frame.id.to_string());
+        record
+            .extra
+            .insert("opentimstdf.tims_id".into(), frame.tims_id.to_string());
+        record
+            .extra
+            .insert("opentimstdf.num_scans".into(), frame.num_scans.to_string());
+        record
+            .extra
+            .insert("opentimstdf.num_peaks".into(), frame.num_peaks.to_string());
+        record
+            .extra
+            .insert("opentimstdf.polarity_symbol".into(), frame.polarity.clone());
+        record
+            .extra
+            .insert("opentimstdf.scan_mode".into(), frame.scan_mode.to_string());
+        record
+            .extra
+            .insert("opentimstdf.msms_type".into(), frame.msms_type.to_string());
+        record.extra.insert(
+            "opentimstdf.mz_calibration_id".into(),
+            frame.mz_calibration_id.to_string(),
+        );
+        if let Some(value) = frame.accumulation_time {
+            record
+                .extra
+                .insert("opentimstdf.accumulation_time".into(), value.to_string());
+        }
+        if let Some(value) = frame.summed_intensities {
+            record
+                .extra
+                .insert("opentimstdf.summed_intensities".into(), value.to_string());
+        }
+        if let Some(value) = frame.max_intensity {
+            record
+                .extra
+                .insert("opentimstdf.max_intensity".into(), value.to_string());
+        }
     }
+    records
 }
 
 /// Build a lazy, frame-at-a-time spectrum iterator. Decodes and projects
@@ -565,8 +626,28 @@ fn frame_iter<'s>(
 }
 
 fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
+    let mut extra = ::std::collections::BTreeMap::new();
+    extra.insert(
+        "opentimstdf.schema_version_major".into(),
+        meta.schema_version_major.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.schema_version_minor".into(),
+        meta.schema_version_minor.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.compression_type".into(),
+        meta.compression_type.to_string(),
+    );
+    extra.insert(
+        "opentimstdf.instrument_name".into(),
+        meta.instrument_name.clone(),
+    );
+    if let Some(value) = &meta.acquisition_date_time {
+        extra.insert("opentimstdf.acquisition_date_time".into(), value.clone());
+    }
     msc::RunMetadata {
-        extra: ::std::collections::BTreeMap::new(),
+        extra,
         source_file_name: bundle_name.to_string(),
         source_file_format: source_file_format_cv(),
         native_id_format: native_id_format_cv(),

@@ -5,9 +5,13 @@
 //! serves per-frame metadata, calibration, and decoded peaks.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{
+    mpsc::{sync_channel, Receiver},
+    Mutex,
+};
 
 use numpy::{IntoPyArray, PyArray1, PyUntypedArrayMethods};
+use openmassspec_core::{SpectrumRecord, SpectrumSource};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -20,6 +24,126 @@ use ::opentimstdf::{
 
 fn to_py_err(e: ::opentimstdf::Error) -> PyErr {
     PyRuntimeError::new_err(format!("{e}"))
+}
+
+/// Spectrum record as a dict. `total_ion_current` and `base_peak_*` carry the
+/// effective values, matching `openmassspec_io.Spectrum`; the vendor-reported
+/// values stay under `reported_*`. Peak arrays bypass JSON, which would turn
+/// NaN into `None` and is slow for large spectra.
+fn record_object(py: Python<'_>, mut rec: SpectrumRecord) -> PyResult<Py<PyAny>> {
+    let tic = rec.effective_tic();
+    let base_peak = rec.effective_base_peak();
+    let mz = std::mem::take(&mut rec.mz);
+    let intensity = std::mem::take(&mut rec.intensity);
+    let mobility = rec.inv_mobility_per_peak.take();
+    let obj = json_object(py, &rec)?;
+    let d = obj.bind(py);
+    d.set_item("mz", mz)?;
+    d.set_item("intensity", intensity)?;
+    d.set_item("inv_mobility_per_peak", mobility)?;
+    d.set_item("total_ion_current", tic)?;
+    d.set_item("base_peak_mz", base_peak.map(|p| p.0))?;
+    d.set_item("base_peak_intensity", base_peak.map(|p| p.1))?;
+    Ok(obj)
+}
+
+fn json_object<T: serde::Serialize>(py: Python<'_>, value: &T) -> PyResult<Py<PyAny>> {
+    let mut value =
+        serde_json::to_value(value).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    normalize_record_json(&mut value);
+    let json = serde_json::to_string(&value).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(py.import("json")?.call_method1("loads", (json,))?.unbind())
+}
+
+fn normalize_record_json(value: &mut serde_json::Value) {
+    if let serde_json::Value::Object(fields) = value {
+        if fields.contains_key("native_id") || fields.contains_key("source_file_name") {
+            fields
+                .entry("extra")
+                .or_insert_with(|| serde_json::json!({}));
+        }
+        if fields.contains_key("native_id") {
+            for (source, alias) in [
+                ("total_ion_current", "reported_total_ion_current"),
+                ("base_peak_mz", "reported_base_peak_mz"),
+                ("base_peak_intensity", "reported_base_peak_intensity"),
+            ] {
+                if let Some(reported) = fields.get(source).cloned() {
+                    fields.insert(alias.to_string(), reported);
+                }
+            }
+        }
+        for (key, field) in fields {
+            match key.as_str() {
+                "polarity" | "scan_mode" | "analyzer" | "activation" => {
+                    if let Some(text) = field.as_str() {
+                        *field = serde_json::Value::String(text.to_ascii_lowercase());
+                    }
+                }
+                "mobility_array_kind" => {
+                    if let Some(text) = field.as_str() {
+                        let normalized = match text {
+                            "InverseReducedVsPerCm2" => "inverse_reduced_k0",
+                            "DriftTimeMilliseconds" => "drift_time_ms",
+                            other => other,
+                        };
+                        *field = serde_json::Value::String(normalized.to_string());
+                    }
+                }
+                "analyzers" => {
+                    if let Some(items) = field.as_array_mut() {
+                        for item in items {
+                            if let Some(text) = item.as_str() {
+                                *item = serde_json::Value::String(text.to_ascii_lowercase());
+                            }
+                        }
+                    }
+                }
+                _ => normalize_record_json(field),
+            }
+        }
+    }
+}
+
+/// Bounded stream of canonical spectrum records, decoded one frame at a time.
+#[pyclass(module = "opentimstdf")]
+struct RecordIter {
+    // `None` marks a complete stream, so a closed channel without it means
+    // the decode thread died.
+    receiver: Mutex<Receiver<Option<SpectrumRecord>>>,
+    finished: bool,
+}
+
+#[pymethods]
+impl RecordIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        if slf.finished {
+            return Ok(None);
+        }
+        let receiver = &slf.receiver;
+        let message = py.detach(|| {
+            receiver
+                .lock()
+                .map_err(|_| "record stream lock poisoned")?
+                .recv()
+                .map_err(|_| "record decode thread ended without a result")
+        });
+        match message {
+            Ok(Some(rec)) => record_object(py, rec).map(Some),
+            Ok(None) => {
+                slf.finished = true;
+                Ok(None)
+            }
+            Err(error) => {
+                slf.finished = true;
+                Err(PyRuntimeError::new_err(error))
+            }
+        }
+    }
 }
 
 // -- Peak --------------------------------------------------------------------
@@ -70,6 +194,7 @@ struct Frame {
     num_peaks: u32,
     #[pyo3(get)]
     tims_id: u64,
+    #[pyo3(get)]
     polarity_symbol: String,
     #[pyo3(get)]
     scan_mode: u32,
@@ -483,6 +608,53 @@ impl Reader {
 
 #[pymethods]
 impl Reader {
+    /// Canonical run metadata used by the Rust mzML writer.
+    fn run_info(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let guard = self.locked_inner()?;
+        let name = self
+            .bundle_dir
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let source = ::opentimstdf::mzml::TdfSource::new(&guard, name).map_err(to_py_err)?;
+        json_object(py, &source.run_metadata())
+    }
+
+    /// Canonical TIC, BPC, and scheduled PRM chromatograms.
+    fn read_chromatograms(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let guard = self.locked_inner()?;
+        let name = self
+            .bundle_dir
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let mut source = ::opentimstdf::mzml::TdfSource::new(&guard, name).map_err(to_py_err)?;
+        source
+            .iter_chromatograms()
+            .map(|rec| json_object(py, &rec))
+            .collect()
+    }
+
+    /// Stream full canonical spectrum records with a two-record buffer.
+    fn iter_records(&self) -> PyResult<RecordIter> {
+        let path = self.bundle_dir.clone();
+        let source = ::opentimstdf::mzml::TdfSource::open(&path).map_err(to_py_err)?;
+        let (sender, receiver) = sync_channel(2);
+        std::thread::spawn(move || {
+            let mut source = source;
+            for record in source.iter_spectra() {
+                if sender.send(Some(record)).is_err() {
+                    return;
+                }
+            }
+            let _ = sender.send(None);
+        });
+        Ok(RecordIter {
+            receiver: Mutex::new(receiver),
+            finished: false,
+        })
+    }
+
     #[new]
     fn new(path: &str) -> PyResult<Self> {
         let r = RsReader::open(path).map_err(to_py_err)?;
@@ -643,6 +815,7 @@ impl Reader {
 
 #[pymodule]
 fn opentimstdf(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<RecordIter>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<Reader>()?;
     m.add_class::<Calibration>()?;
