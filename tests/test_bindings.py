@@ -12,6 +12,8 @@ import pytest
 def test_canonical_records():
     path = Path(os.environ.get("OPENTIMSTDF_TEST_BUNDLE", "corpus/NQO1-F107C_coi-N2-P_200-0C_3996.d"))
     if not path.is_dir():
+        if os.environ.get("REQUIRE_CORPUS", "").strip() in {"1", "true", "all"}:
+            pytest.fail(f"REQUIRE_CORPUS is set but {path} is not a TDF bundle")
         pytest.skip("set OPENTIMSTDF_TEST_BUNDLE to a TDF bundle")
 
     reader = opentimstdf.Reader(str(path))

@@ -17,7 +17,7 @@ env:
   # zipped), cached under corpus/ so crates/opentimstdf/tests/conformance.rs
   # can exercise a real decode path in CI instead of always skipping - see
   # Sigilweaver/OpenTimsTDF#35. Keep BRUKER_BUNDLE in sync with
-  # conformance.rs's bundle_dir() candidates.
+  # CI_BUNDLE in crates/opentimstdf/tests/common/mod.rs.
   BRUKER_ZIP_URL: >-
     https://ftp.pride.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
   BRUKER_BUNDLE: NQO1-F107C_coi-N2-P_200-0C_3996.d
@@ -65,6 +65,12 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace --all-targets
+        env:
+          # The Linux leg downloads the corpus bundle above, so a missing
+          # bundle there is a CI failure, not a skip. Other legs have no
+          # corpus and skip the bundle tests.
+          REQUIRE_CORPUS: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
+          OPENTIMSTDF_TEST_BUNDLE: ${{ matrix.os == 'ubuntu-latest' && format('corpus/{0}', env.BRUKER_BUNDLE) || '' }}
 
       - name: Python binding parity
         if: matrix.os == 'ubuntu-latest'
@@ -72,7 +78,7 @@ jobs:
           python3 -m venv .venv
           .venv/bin/python -m pip install 'maturin>=1.5,<2' numpy pytest
           VIRTUAL_ENV="$PWD/.venv" .venv/bin/maturin develop --release
-          OPENTIMSTDF_TEST_BUNDLE="corpus/$BRUKER_BUNDLE" .venv/bin/python -m pytest tests/test_bindings.py -v
+          REQUIRE_CORPUS=1 OPENTIMSTDF_TEST_BUNDLE="corpus/$BRUKER_BUNDLE" .venv/bin/python -m pytest tests/test_bindings.py -v
 
   msrv:
     name: MSRV check (1.95)

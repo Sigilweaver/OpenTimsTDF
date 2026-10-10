@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `Reader::instrument_serial_number()`. mzML run metadata now carries the
   instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
   bundle records one.
+- Test configuration: `OPENTIMSTDF_TEST_BUNDLE` selects the bundle for the
+  bundle-agnostic tests, `OPENTIMSTDF_TEST_CACHE` the PRIDE cache root, and
+  `REQUIRE_CORPUS=1` (`all` for the PRIDE tests too) fails instead of
+  skipping when a bundle is missing. CI sets `REQUIRE_CORPUS=1` on the leg
+  that downloads the corpus bundle.
 
 ### Changed
 
@@ -28,6 +33,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - mzML: diaPASEF spectra no longer report the isolation window center as the
   selected ion m/z. The isolation window target and width are kept; the
   selected ion is left empty because a DIA window has no single precursor.
+- Integration tests resolved bundle paths relative to the crate directory,
+  so every bundle test always skipped. Paths now resolve from the repo root.
 
 ## [2.0.0] - 2026-09-28
 
