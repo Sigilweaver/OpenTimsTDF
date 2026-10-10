@@ -5,7 +5,7 @@
 [![crates.io](https://img.shields.io/crates/v/opentimstdf.svg)](https://crates.io/crates/opentimstdf)
 [![PyPI](https://img.shields.io/pypi/v/opentimstdf.svg)](https://pypi.org/project/opentimstdf/)
 [![docs.rs](https://img.shields.io/docsrs/opentimstdf)](https://docs.rs/opentimstdf)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/LICENSE)
 [![Rust MSRV](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
 > Part of the [OpenMassSpec](https://github.com/Sigilweaver/OpenMassSpec)
@@ -93,7 +93,7 @@ full quickstart, guide, and format specification.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/LICENSE).
 
 The TDF format and codecs were worked out from public sample data
-(PRIDE accessions). See [ATTRIBUTION.md](ATTRIBUTION.md).
+(PRIDE accessions). See [ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/ATTRIBUTION.md).
