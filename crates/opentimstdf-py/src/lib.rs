@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::{
     mpsc::{sync_channel, Receiver},
-    Mutex,
+    Mutex, OnceLock,
 };
 
 use numpy::{IntoPyArray, PyArray1, PyUntypedArrayMethods};
@@ -595,6 +595,11 @@ impl DecodedSpectrum {
 struct Reader {
     inner: Mutex<RsReader>,
     bundle_dir: PathBuf,
+    /// Calibration is fixed for a bundle; computed on first use (several
+    /// SQLite lookups) and reused by every later `calibration()` /
+    /// `decode_spectrum()` call. Lazy so `Reader()` still opens bundles whose
+    /// calibration metadata is invalid.
+    calibration: OnceLock<RsCalibration>,
 }
 
 impl Reader {
@@ -603,6 +608,15 @@ impl Reader {
         self.inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))
+    }
+
+    /// Cached calibration, computing it with `inner` on first use.
+    fn cached_calibration(&self, inner: &RsReader) -> PyResult<RsCalibration> {
+        if let Some(cal) = self.calibration.get() {
+            return Ok(*cal);
+        }
+        let cal = inner.calibration().map_err(to_py_err)?;
+        Ok(*self.calibration.get_or_init(|| cal))
     }
 }
 
@@ -662,6 +676,7 @@ impl Reader {
         Ok(Self {
             inner: Mutex::new(r),
             bundle_dir,
+            calibration: OnceLock::new(),
         })
     }
 
@@ -680,7 +695,8 @@ impl Reader {
     }
 
     fn calibration(&self) -> PyResult<Calibration> {
-        let inner = self.locked_inner()?.calibration().map_err(to_py_err)?;
+        let guard = self.locked_inner()?;
+        let inner = self.cached_calibration(&guard)?;
         Ok(Calibration { inner })
     }
 
@@ -730,7 +746,7 @@ impl Reader {
     /// lock acquisition.
     fn decode_spectrum(&self, py: Python<'_>, frame: &Frame) -> PyResult<DecodedSpectrum> {
         let guard = self.locked_inner()?;
-        let cal = guard.calibration().map_err(to_py_err)?;
+        let cal = self.cached_calibration(&guard)?;
         let rs_frame = RsFrame {
             id: frame.id,
             time: frame.time,

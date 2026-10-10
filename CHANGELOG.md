@@ -16,6 +16,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `analysis.tdf_bin` file length is read once in `Reader::open` instead
   of once per decoded frame.
+- Python: `Reader` computes calibration once and reuses it for
+  `calibration()` and `decode_spectrum()` instead of re-querying SQLite on
+  every call.
 
 ### Fixed
 
