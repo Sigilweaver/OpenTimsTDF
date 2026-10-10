@@ -1,10 +1,15 @@
 /// Linear-in-sqrt TOF<->m/z and linear scan<->1/K0 calibration, following
 /// the open-source `opentims++` model (`tof2mz_converter.cpp`,
-/// `scan2inv_ion_mobility_converter.cpp`). See SPEC sections 5 and 6.
+/// `scan2inv_ion_mobility_converter.cpp`). See
+/// `docs/docs/format/04-calibration.md`.
 ///
 /// This is NOT the proprietary polynomial model carried in
-/// `MzCalibration` / `TimsCalibration`; it is the open-source linear
-/// approximation, which agrees to under 2 ppm on the validation corpus.
+/// `MzCalibration` / `TimsCalibration`. `Reader::calibration()` builds the
+/// m/z side from the acquisition m/z range in `GlobalMetadata` (the
+/// "boundary variant" in the format docs), which can be off by up to
+/// ~15000 ppm on some bundles. The < 2 ppm figure in the docs applies to the
+/// regressed variant fitted from `CalibrationInfo`, which is not
+/// implemented.
 #[derive(Debug, Clone, Copy)]
 pub struct Calibration {
     /// `sqrt(mz) = mz_intercept + mz_slope * tof`

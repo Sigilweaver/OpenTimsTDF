@@ -63,6 +63,10 @@ pub struct Reader {
     /// `conn` on the per-frame decode path.
     max_num_peaks_per_scan: u32,
     tdf_bin: File,
+    /// Length of `analysis.tdf_bin`, read once at `open()` so the per-frame
+    /// decode path does not issue an `fstat` for every frame. The bundle is
+    /// treated as immutable while the reader is open.
+    tdf_bin_len: u64,
 }
 
 impl Reader {
@@ -74,6 +78,7 @@ impl Reader {
         }
         let tdf_bin_path = bundle_dir.join("analysis.tdf_bin");
         let tdf_bin = File::open(&tdf_bin_path).map_err(|_| Error::MissingFile(tdf_bin_path))?;
+        let tdf_bin_len = tdf_bin.metadata()?.len();
         let conn = Connection::open_with_flags(&tdf, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         let raw_ct: String = conn.query_row(
             "SELECT Value FROM GlobalMetadata WHERE Key = 'TimsCompressionType'",
@@ -85,8 +90,7 @@ impl Reader {
             .parse()
             .map_err(|_| Error::UnsupportedCodec(raw_ct.clone()))?;
         // Codec-1-only metadata: some codec-2 bundles omit this key entirely,
-        // so a missing row must default to 0 rather than fail Reader::open
-        // (matches the old lazy per-call lookup's tolerance, just eagerly).
+        // so a missing row must default to 0 rather than fail Reader::open.
         let max_num_peaks_per_scan: u32 = conn
             .query_row(
                 "SELECT Value FROM GlobalMetadata WHERE Key='MaxNumPeaksPerScan'",
@@ -102,6 +106,7 @@ impl Reader {
             compression_type,
             max_num_peaks_per_scan,
             tdf_bin,
+            tdf_bin_len,
         })
     }
 
@@ -147,6 +152,23 @@ impl Reader {
             compression_type: self.compression_type,
             acquisition_date_time,
         })
+    }
+
+    /// Instrument serial number from `GlobalMetadata.InstrumentSerialNumber`.
+    /// `None` when the key is absent or blank.
+    pub fn instrument_serial_number(&self) -> Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT Value FROM GlobalMetadata WHERE Key = 'InstrumentSerialNumber'",
+                [],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty()))
     }
 
     /// Build the open-source calibration object for this bundle (SPEC §5 and §6).
@@ -499,7 +521,7 @@ impl Reader {
         }
 
         let payload_offset = frame.tims_id + 8;
-        let file_len = f.metadata()?.len();
+        let file_len = self.tdf_bin_len;
         let payload_len = checked_block_len(file_len, payload_offset, u64::from(block_size) - 8)
             .ok_or_else(|| {
                 Error::CorruptFrame(
@@ -550,7 +572,7 @@ impl Reader {
             return Ok(Vec::new());
         }
 
-        let file_len = f.metadata()?.len();
+        let file_len = self.tdf_bin_len;
 
         // u64 throughout: scan_count is read straight from the file, so
         // `(scan_count + 1) * 4` must not be allowed to overflow u32.
@@ -578,9 +600,19 @@ impl Reader {
         read_at_exact(f, offsets_offset, &mut raw_offsets)?;
         let mut scan_offsets = Vec::with_capacity(scan_count as usize + 1);
         let (chunks, _) = raw_offsets.as_chunks::<4>();
-        for chunk in chunks {
-            let o = u32::from_le_bytes(*chunk);
-            scan_offsets.push(u64::from(o).saturating_sub(compression_offset) as usize);
+        for (i, chunk) in chunks.iter().enumerate() {
+            let o = u64::from(u32::from_le_bytes(*chunk));
+            // Offsets are relative to the frame start and must point past the
+            // 8-byte header and the offset table itself. A smaller value means
+            // the table is corrupt; rebasing it would silently decode the
+            // wrong bytes.
+            if o < compression_offset {
+                return Err(Error::CorruptFrame(
+                    frame.id,
+                    format!("scan offset {i} = {o} < header size {compression_offset}"),
+                ));
+            }
+            scan_offsets.push((o - compression_offset) as usize);
         }
 
         let compressed_offset = frame.tims_id + compression_offset;

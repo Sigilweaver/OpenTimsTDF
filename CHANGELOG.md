@@ -6,6 +6,46 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- `Reader::instrument_serial_number()`. mzML run metadata now carries the
+  instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
+  bundle records one.
+- Test configuration: `OPENTIMSTDF_TEST_BUNDLE` selects the bundle for the
+  bundle-agnostic tests, `OPENTIMSTDF_TEST_CACHE` the PRIDE cache root, and
+  `REQUIRE_CORPUS=1` (`all` for the PRIDE tests too) fails instead of
+  skipping when a bundle is missing. CI sets `REQUIRE_CORPUS=1` on the leg
+  that downloads the corpus bundle.
+
+### Changed
+
+- The `analysis.tdf_bin` file length is read once in `Reader::open` instead
+  of once per decoded frame.
+- Python: `Reader` computes calibration once and reuses it for
+  `calibration()` and `decode_spectrum()` instead of re-querying SQLite on
+  every call.
+- Removed a stray `python/Cargo.lock` (there is no `python/` crate), fixed
+  the crate docs pointing to a nonexistent `re/SPEC.md`, and ignored
+  `.claude/` and `.devcontainer/`.
+
+### Fixed
+
+- Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
+  frame header, instead of decoding the wrong bytes.
+- Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.
+- mzML: diaPASEF spectra no longer report the isolation window center as the
+  selected ion m/z. The isolation window target and width are kept; the
+  selected ion is left empty because a DIA window has no single precursor.
+- Integration tests resolved bundle paths relative to the crate directory,
+  so every bundle test always skipped. Paths now resolve from the repo root.
+- Publish workflow: a failed `cargo publish` now fails the job instead of
+  being ignored.
+- Docs: m/z calibration accuracy claims. `Reader::calibration()` implements
+  only the range-based (boundary) model, off by up to ~15000 ppm on some
+  bundles; the < 2 ppm figure applies to the `CalibrationInfo` fit, which is
+  not implemented. The calibration guide described tables the reader does
+  not read.
+
 ## [2.0.0] - 2026-09-28
 
 ### Added

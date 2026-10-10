@@ -1,35 +1,18 @@
-//! End-to-end check: decode a known-good codec-2 frame and verify the
-//! decoded intensity sum against the in-DB `Frames.SummedIntensities`.
+//! End-to-end checks against real `.d` bundles.
 //!
-//! Guarded by an env var so CI without the corpus skips silently.
+//! Bundle lookup lives in `common/mod.rs`: paths resolve from the repo root,
+//! `OPENTIMSTDF_TEST_BUNDLE` selects the bundle for the bundle-agnostic
+//! tests, and `REQUIRE_CORPUS=1` turns a missing bundle into a failure.
+//! Bundle-specific tests (PRIDE accessions with hard-coded expectations)
+//! skip unless their bundle is in the cache or `REQUIRE_CORPUS=all`.
 
-use std::path::PathBuf;
+mod common;
 
-fn bundle_dir(rel: &str) -> Option<PathBuf> {
-    // PRIDE bundles are extracted on demand to re/artifacts/cache/ by the
-    // Python probe scripts.  That directory is gitignored scratch space.
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let p = root.join("re/artifacts/cache").join(rel);
-    if p.join("analysis.tdf").exists() && p.join("analysis.tdf_bin").exists() {
-        Some(p)
-    } else {
-        None
-    }
-}
-
-fn probe_dir(accession: &str) -> PathBuf {
-    // Probe corpus files live in corpus/probes/<accession>/ and are always
-    // present in the repository.
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    root.join("corpus/probes").join(accession)
-}
+use common::PXD027359;
 
 #[test]
 fn pride_pxd027359_single_peak_frames_exact_match() {
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -56,10 +39,7 @@ fn calibration_ranges_match_metadata() {
     // At tof=0 the m/z should equal MzAcqRangeLower; at tof=DigitizerNumSamples
     // it should equal MzAcqRangeUpper. Similarly for 1/K₀: scan=0 → upper,
     // scan=scan_max → lower.
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -85,12 +65,10 @@ fn calibration_ranges_match_metadata() {
 
 #[test]
 fn pride_pxd022216_codec1_numpeaks_match() {
-    let bundle = match bundle_dir("pride/PXD022216/fmeierab_T190525_CLL_diaPASEF_02_1977.d") {
-        Some(b) => b,
-        None => {
-            eprintln!("skipping: PXD022216 codec-1 bundle not present");
-            return;
-        }
+    let Some(bundle) =
+        common::pride_bundle("pride/PXD022216/fmeierab_T190525_CLL_diaPASEF_02_1977.d")
+    else {
+        return;
     };
     let r = opentimstdf::Reader::open(bundle).expect("open");
     assert_eq!(r.compression_type(), 1, "bundle should be codec 1");
@@ -132,8 +110,8 @@ fn pride_pxd022216_codec1_numpeaks_match() {
 
 #[test]
 fn pride_pxd039066_schema37_single_peak_frames() {
-    let Some(dir) = bundle_dir("pride/PXD039066/TCell_10C_22G_I50_L25_Slot1-38_1_2723.d") else {
-        eprintln!("skipping: PXD039066 cache not present");
+    let Some(dir) = common::pride_bundle("pride/PXD039066/TCell_10C_22G_I50_L25_Slot1-38_1_2723.d")
+    else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -179,12 +157,9 @@ fn pride_pxd039066_schema37_single_peak_frames() {
 
 #[test]
 fn frame_metadata_fields_populated() {
-    // Frame now exposes time, scan_mode, msms_type, accumulation_time.
+    // Frame exposes time, scan_mode, msms_type, accumulation_time.
     // Verify on the codec-2 DDA bundle we always have available.
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -218,10 +193,7 @@ fn frame_metadata_fields_populated() {
 
 #[test]
 fn pasef_msms_info_for_ms2_frame() {
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -270,9 +242,9 @@ fn pasef_msms_info_for_ms2_frame() {
 #[test]
 fn dia_windows_for_ms2_frame() {
     // PXD025576 is our verified diaPASEF bundle.
-    let Some(dir) = bundle_dir("pride/PXD025576/20210503_TIMS05_PS_SA_WholeProt_DIAMAX_100ng_1.d")
+    let Some(dir) =
+        common::pride_bundle("pride/PXD025576/20210503_TIMS05_PS_SA_WholeProt_DIAMAX_100ng_1.d")
     else {
-        eprintln!("skipping: PXD025576 cache not present");
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -311,10 +283,7 @@ fn dia_windows_for_ms2_frame() {
 fn pasef_bundle_has_no_dia_windows() {
     // A PASEF DDA bundle should return None from dia_windows_for_frame for all
     // frames, because DiaFrameMsMsInfo is empty (not absent, but no entries).
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -336,11 +305,9 @@ fn prm_pasef_pxd028279_frame_distribution() {
     // Verify prm-PASEF frame metadata from PXD028279 (Brzhozovskiy et al. 2022).
     // Only analysis.tdf is present in the probe directory (no .tdf_bin); this
     // test covers the SQLite metadata path only.
-    let dir = probe_dir("PXD028279");
-    if !dir.join("analysis.tdf").exists() {
-        eprintln!("skipping: probe corpus {} not present", dir.display());
+    let Some(dir) = common::probe_dir("PXD028279") else {
         return;
-    }
+    };
     let r = opentimstdf::Reader::open(dir).expect("open PXD028279 PRM probe");
 
     let frames = r.frames().expect("frames");
@@ -417,14 +384,11 @@ fn prm_pasef_pxd028279_frame_distribution() {
 
 #[test]
 fn concurrent_decode_across_threads_matches_sequential() {
-    // Reader::decode_peaks no longer takes a lock internally (positional
+    // Reader::decode_peaks takes no lock internally (positional
     // reads via read_at instead of a shared Mutex<File> seek cursor), so
     // many threads sharing one &Reader should be able to decode different
     // frames in parallel and get identical results to sequential decoding.
-    let Some(dir) = bundle_dir(
-        "pride/PXD027359/20201207_tims03_Evo03_PS_SA_HeLa_200ng_EvoSep_prot_DDA_21min_8cm_S1-C10_1_22476.d",
-    ) else {
-        eprintln!("skipping: PXD027359 cache not present");
+    let Some(dir) = common::test_bundle() else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
@@ -451,4 +415,97 @@ fn concurrent_decode_across_threads_matches_sequential() {
             assert_eq!((a.scan, a.tof, a.intensity), (b.scan, b.tof, b.intensity));
         }
     }
+}
+
+#[test]
+fn decoded_peaks_match_frame_table() {
+    // Bundle-agnostic: for a sample of frames, the decoded peak count must
+    // equal Frames.NumPeaks, every scan index must be in range, and the
+    // decoded intensities must stay within the frame table's aggregates.
+    let Some(dir) = common::test_bundle() else {
+        return;
+    };
+    let r = opentimstdf::Reader::open(&dir).expect("open");
+    let frames = r.frames().expect("frames");
+    assert!(!frames.is_empty(), "no frames in {}", dir.display());
+
+    let step = (frames.len() / 64).max(1);
+    let mut checked = 0;
+    for frame in frames.iter().step_by(step) {
+        let peaks = r.decode_peaks(frame).expect("decode");
+        assert_eq!(
+            peaks.len() as u32,
+            frame.num_peaks,
+            "frame {}: decoded {} peaks, NumPeaks={}",
+            frame.id,
+            peaks.len(),
+            frame.num_peaks
+        );
+        for p in &peaks {
+            assert!(
+                p.scan < frame.num_scans,
+                "frame {}: scan {} >= NumScans {}",
+                frame.id,
+                p.scan,
+                frame.num_scans
+            );
+        }
+        // Frames.SummedIntensities / MaxIntensity are not exact aggregates of
+        // the stored peaks on every bundle: on PXD036417 they run slightly
+        // high (confirmed with an independent decode of the raw bytes). The
+        // decoded values must never exceed them, though.
+        let sum: u64 = peaks.iter().map(|p| u64::from(p.intensity)).sum();
+        if let Some(expected) = frame.summed_intensities {
+            assert!(
+                sum <= expected,
+                "frame {}: decoded intensity sum {sum} > SummedIntensities {expected}",
+                frame.id
+            );
+        }
+        if let (Some(expected), Some(max)) =
+            (frame.max_intensity, peaks.iter().map(|p| p.intensity).max())
+        {
+            assert!(
+                u64::from(max) <= expected,
+                "frame {}: decoded max {max} > MaxIntensity {expected}",
+                frame.id
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0);
+}
+
+#[test]
+fn frames_time_ordered_and_calibration_sane() {
+    // Bundle-agnostic structural checks on the frame table and calibration.
+    let Some(dir) = common::test_bundle() else {
+        return;
+    };
+    let r = opentimstdf::Reader::open(&dir).expect("open");
+    let frames = r.frames().expect("frames");
+    assert!(!frames.is_empty());
+    assert!(
+        frames.iter().any(|f| f.msms_type == 0),
+        "expected MS1 frames"
+    );
+    for w in frames.windows(2) {
+        assert!(
+            w[1].time >= w[0].time,
+            "frames not time-ordered: {} t={} before {} t={}",
+            w[0].id,
+            w[0].time,
+            w[1].id,
+            w[1].time
+        );
+    }
+
+    let c = r.calibration().expect("calibration");
+    let lo = c.tof_to_mz(0);
+    let hi = c.tof_to_mz(c.mz_to_tof(lo) + 100_000);
+    assert!(lo > 0.0 && hi > lo, "m/z not increasing with TOF");
+    assert!(
+        c.scan_to_inv_mobility(0) > c.scan_to_inv_mobility(100),
+        "1/K0 should decrease with scan index"
+    );
 }
