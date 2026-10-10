@@ -23,7 +23,7 @@ block index lives in the SQLite database.
 | [01-tdf-sqlite-schema.md](01-tdf-sqlite-schema.md) | `analysis.tdf` SQLite schema: `GlobalMetadata`, `Frames`, mode-specific index tables, calibration tables. |
 | [02-tdf-bin-block-stream.md](02-tdf-bin-block-stream.md) | `analysis.tdf_bin` block layout (8-byte block header, payload, padding). |
 | [03-frame-payload-encoding.md](03-frame-payload-encoding.md) | Frame payload codecs: Codec 1 (LZF + signed-delta) and Codec 2 (zstd + byte-transpose). |
-| [04-calibration.md](04-calibration.md) | TOF -> m/z and scan -> 1/K0 calibration models, regressed and boundary variants. |
+| [04-calibration.md](04-calibration.md) | TOF -> m/z (from `MzCalibration`, with a range fallback) and scan -> 1/K0 calibration models. |
 | [05-instrument-tables.md](05-instrument-tables.md) | Acquisition-mode tables: diaPASEF, PASEF DDA, prm-PASEF, properties, segments, error log. |
 | [06-references-and-gaps.md](06-references-and-gaps.md) | Prior art, known gaps, and items out of scope. |
 

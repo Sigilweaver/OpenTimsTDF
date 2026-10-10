@@ -35,15 +35,17 @@ fn pride_pxd027359_single_peak_frames_exact_match() {
 }
 
 #[test]
-fn calibration_ranges_match_metadata() {
-    // At tof=0 the m/z should equal MzAcqRangeLower; at tof=DigitizerNumSamples
-    // it should equal MzAcqRangeUpper. Similarly for 1/K₀: scan=0 → upper,
-    // scan=scan_max → lower.
+fn range_fallback_calibration_matches_metadata() {
+    // Range fallback: at tof=0 the m/z equals MzAcqRangeLower; at
+    // tof=DigitizerNumSamples it equals MzAcqRangeUpper. Similarly for
+    // 1/K0: scan=0 -> upper, scan=scan_max -> lower.
     let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
     };
     let r = opentimstdf::Reader::open(dir).expect("open");
-    let c = r.calibration().expect("calibration");
+    let c = r
+        .range_fallback_calibration()
+        .expect("range fallback calibration");
 
     // Values pulled by hand from analysis.tdf GlobalMetadata:
     //   MzAcqRangeLower=100, MzAcqRangeUpper=1700, DigitizerNumSamples=394531
@@ -372,8 +374,10 @@ fn prm_pasef_pxd028279_frame_distribution() {
         assert!(target.time > 0.0, "expected non-zero scheduled time");
     }
 
-    // Calibration should be readable.
-    let cal = r.calibration().expect("calibration");
+    // The range fallback should be readable.
+    let cal = r
+        .range_fallback_calibration()
+        .expect("range fallback calibration");
     // sv=3.5 bundle: MzAcqRangeLower=100, MzAcqRangeUpper=1700, DigitizerNumSamples=393418
     assert!((cal.tof_to_mz(0) - 100.0).abs() < 1.0, "mz lower bound");
     assert!(

@@ -8,6 +8,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- `Reader::bundle_calibration()`, `mz_calibration_model()`,
+  `mz_calibration_status()` and `range_fallback_calibration()`;
+  `BundleCalibration`, `MzCalibrationModel`, `MzCalibrationStatus`,
+  `MzConversion` and `TablesMzModel`; `Calibration::tof_to_mz_f64` and
+  `mz_to_tof_f64` for fractional TOF indices. Run metadata `extra` carries
+  `opentimstdf.mz_calibration` (`tables` or `range_fallback`) and, for the
+  fallback, `opentimstdf.mz_calibration_fallback_reason`. Python:
+  `Reader.mz_calibration_model()`, `Reader.mz_calibration_fallback_reason()`,
+  `Calibration.mz_model`, and a `RuntimeWarning` on fallback.
 - `Reader::instrument_serial_number()`. mzML run metadata now carries the
   instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
   bundle records one.
@@ -19,6 +28,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Breaking:** `Calibration` replaces the `mz_intercept` and `mz_slope`
+  fields with `mz: MzConversion` (`Tables` or `RangeFallback`). Python
+  `Calibration.mz_intercept` / `mz_slope` return `None` for the tables model.
+- mzML and Python `decode_spectrum` convert each frame with its own
+  `MzCalibration` row, so dual-polarity runs use the right calibration per
+  polarity.
+- The `opentimstdf` crate depends on `log` (for the calibration fallback
+  warning).
 - The `analysis.tdf_bin` file length is read once in `Reader::open` instead
   of once per decoded frame.
 - Python: `Reader` computes calibration once and reuses it for
@@ -30,6 +47,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- m/z is now computed from the bundle's `MzCalibration` table
+  (`DigitizerDelay`, `DigitizerTimebase`, `C0`, `C1`, `C2`, `C4`), using the
+  row each frame references, instead of from the acquisition m/z range.
+  Median error against the bundles' stored precursor m/z drops from 2 to
+  200 ppm to under 1 ppm on most tested bundles. Bundles without a usable
+  table keep the range model; the reason is logged, returned by
+  `Reader::mz_calibration_status()`, and written to run metadata.
+- Docs: `build:cloudflare` writes to `build/opentimstdf/docs`, matching the
+  site route.
 - Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
   frame header, instead of decoding the wrong bytes.
 - Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.

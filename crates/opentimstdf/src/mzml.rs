@@ -47,8 +47,8 @@ use openmassspec_core as msc;
 
 use crate::error::Result;
 use crate::{
-    Calibration, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor as TdfPrecursor,
-    PrmTarget, Reader,
+    BundleCalibration, Calibration, DiaWindow, Frame, Metadata, MzCalibrationStatus, PasefMsMsInfo,
+    Peak, Precursor as TdfPrecursor, PrmTarget, Reader,
 };
 
 const SOFTWARE_NAME: &str = "opentimstdf";
@@ -432,7 +432,7 @@ pub struct TdfSource<'a> {
     bundle_name: String,
     metadata: Metadata,
     instrument_serial_number: Option<String>,
-    calibration: Calibration,
+    calibration: BundleCalibration,
     frames: Vec<Frame>,
 }
 
@@ -442,7 +442,7 @@ impl<'a> TdfSource<'a> {
     pub fn new(reader: &'a Reader, bundle_name: impl Into<String>) -> Result<Self> {
         let metadata = reader.metadata()?;
         let instrument_serial_number = reader.instrument_serial_number()?;
-        let calibration = reader.calibration()?;
+        let calibration = reader.bundle_calibration()?;
         let frames = reader.frames()?;
         Ok(Self {
             reader,
@@ -462,7 +462,7 @@ impl<'a> TdfSource<'a> {
         let reader = Reader::open(path)?;
         let metadata = reader.metadata()?;
         let instrument_serial_number = reader.instrument_serial_number()?;
-        let calibration = reader.calibration()?;
+        let calibration = reader.bundle_calibration()?;
         let frames = reader.frames()?;
         let bundle_name = path
             .file_name()
@@ -486,7 +486,7 @@ pub struct OwnedTdfSource {
     bundle_name: String,
     metadata: Metadata,
     instrument_serial_number: Option<String>,
-    calibration: Calibration,
+    calibration: BundleCalibration,
     frames: Vec<Frame>,
 }
 
@@ -614,7 +614,7 @@ fn spectra_for_frame(
 fn frame_iter<'s>(
     reader: &'s Reader,
     frames: &'s [Frame],
-    calibration: &'s Calibration,
+    calibration: &'s BundleCalibration,
 ) -> impl Iterator<Item = msc::SpectrumRecord> + 's {
     let mut frame_idx = 0usize;
     let mut pending = std::collections::VecDeque::new();
@@ -628,7 +628,7 @@ fn frame_iter<'s>(
         pending.extend(spectra_for_frame(
             reader,
             frame,
-            calibration,
+            calibration.for_frame(frame),
             &mut scan_counter,
         ));
     })
@@ -638,8 +638,19 @@ fn run_metadata_for(
     meta: &Metadata,
     bundle_name: &str,
     instrument_serial_number: Option<&str>,
+    mz_calibration: &MzCalibrationStatus,
 ) -> msc::RunMetadata {
     let mut extra = ::std::collections::BTreeMap::new();
+    extra.insert(
+        "opentimstdf.mz_calibration".into(),
+        mz_calibration.model.as_str().to_string(),
+    );
+    if let Some(reason) = &mz_calibration.fallback_reason {
+        extra.insert(
+            "opentimstdf.mz_calibration_fallback_reason".into(),
+            reason.clone(),
+        );
+    }
     extra.insert(
         "opentimstdf.schema_version_major".into(),
         meta.schema_version_major.to_string(),
@@ -906,6 +917,7 @@ impl<'a> msc::SpectrumSource for TdfSource<'a> {
             &self.metadata,
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
+            &self.calibration.status,
         )
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
@@ -924,6 +936,7 @@ impl msc::SpectrumSource for OwnedTdfSource {
             &self.metadata,
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
+            &self.calibration.status,
         )
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
@@ -960,8 +973,10 @@ mod tests {
 
     fn sample_calibration() -> Calibration {
         Calibration {
-            mz_intercept: 1.0,
-            mz_slope: 0.001,
+            mz: crate::MzConversion::RangeFallback {
+                intercept: 1.0,
+                slope: 0.001,
+            },
             im_intercept: 0.1,
             im_slope: 0.002,
         }
@@ -1187,10 +1202,50 @@ mod tests {
         }
     }
 
+    fn tables_status() -> MzCalibrationStatus {
+        MzCalibrationStatus {
+            model: crate::MzCalibrationModel::Tables,
+            fallback_reason: None,
+        }
+    }
+
+    #[test]
+    fn run_metadata_for_records_mz_calibration_model() {
+        let meta = sample_metadata(None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        assert_eq!(
+            rm.extra
+                .get("opentimstdf.mz_calibration")
+                .map(String::as_str),
+            Some("tables")
+        );
+        assert!(!rm
+            .extra
+            .contains_key("opentimstdf.mz_calibration_fallback_reason"));
+
+        let fallback = MzCalibrationStatus {
+            model: crate::MzCalibrationModel::RangeFallback,
+            fallback_reason: Some("the MzCalibration table is absent".into()),
+        };
+        let rm = run_metadata_for(&meta, "bundle.d", None, &fallback);
+        assert_eq!(
+            rm.extra
+                .get("opentimstdf.mz_calibration")
+                .map(String::as_str),
+            Some("range_fallback")
+        );
+        assert_eq!(
+            rm.extra
+                .get("opentimstdf.mz_calibration_fallback_reason")
+                .map(String::as_str),
+            Some("the MzCalibration table is absent")
+        );
+    }
+
     #[test]
     fn run_metadata_for_wires_up_start_timestamp() {
         let meta = sample_metadata(Some("2018-08-21T20:40:14.356+02:00"));
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(
             rm.start_timestamp.as_deref(),
             Some("2018-08-21T20:40:14.356+02:00")
@@ -1200,7 +1255,7 @@ mod tests {
     #[test]
     fn run_metadata_for_none_when_absent() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(rm.start_timestamp, None);
     }
 
@@ -1209,14 +1264,14 @@ mod tests {
         // Defensive path: don't claim RFC 3339 compliance for a value that
         // isn't, even though no real-world bundle observed so far hits this.
         let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(rm.start_timestamp, None);
     }
 
     #[test]
     fn run_metadata_for_wires_up_acquisition_software() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(rm.acquisition_software_name.as_deref(), Some("timsControl"));
         assert_eq!(rm.acquisition_software_version.as_deref(), Some("2.0.18"));
     }
@@ -1224,9 +1279,9 @@ mod tests {
     #[test]
     fn run_metadata_for_passes_through_serial_number() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", Some("1234567.10"));
+        let rm = run_metadata_for(&meta, "bundle.d", Some("1234567.10"), &tables_status());
         assert_eq!(rm.instrument_serial_number.as_deref(), Some("1234567.10"));
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(rm.instrument_serial_number, None);
     }
 
@@ -1235,7 +1290,7 @@ mod tests {
         let mut meta = sample_metadata(None);
         meta.acquisition_software = String::new();
         meta.acquisition_software_version = String::new();
-        let rm = run_metadata_for(&meta, "bundle.d", None);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
         assert_eq!(rm.acquisition_software_name, None);
         assert_eq!(rm.acquisition_software_version, None);
     }

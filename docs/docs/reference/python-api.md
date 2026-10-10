@@ -22,7 +22,9 @@ reader = opentimstdf.Reader("run.d")
 | `bundle_dir` | `str` | Path to the opened `.d/` directory |
 | `compression_type` | `int` | Codec used for peak blocks (1 or 2) |
 | `metadata()` | `Metadata` | Instrument, software, and schema-version metadata |
-| `calibration()` | `Calibration` | m/z and inverse-mobility calibration for the run |
+| `calibration()` | `Calibration` | m/z and inverse-mobility calibration for the most-referenced `MzCalibration` row |
+| `mz_calibration_model()` | `str` | `"tables"` or `"range_fallback"` |
+| `mz_calibration_fallback_reason()` | `str \| None` | Why the calibration tables could not be used; `None` when they are |
 | `frame(id)` | `Frame` | Metadata for a single frame by id |
 | `frames()` | `list[Frame]` | Metadata for every frame in the run, in id order |
 | `decode_peaks(frame)` | `list[Peak]` | Raw (uncalibrated) peaks for a frame |
@@ -94,12 +96,15 @@ stream.
 ### Calibration
 
 Converts between raw TOF/scan indices and calibrated m/z / inverse
-mobility.
+mobility. When the bundle uses the range fallback for m/z, the first
+calibration lookup on a `Reader` raises a `RuntimeWarning` with the
+reason.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `mz_intercept` | `float` | m/z calibration intercept |
-| `mz_slope` | `float` | m/z calibration slope |
+| `mz_model` | `str` | `"tables"` or `"range_fallback"` |
+| `mz_intercept` | `float \| None` | Range-fallback intercept (`sqrt(mz) = mz_intercept + mz_slope * tof`); `None` for the tables model |
+| `mz_slope` | `float \| None` | Range-fallback slope; `None` for the tables model |
 | `im_intercept` | `float` | Inverse-mobility calibration intercept |
 | `im_slope` | `float` | Inverse-mobility calibration slope |
 | `tof_to_mz(tof)` | `float` | Calibrated m/z for a raw TOF index |

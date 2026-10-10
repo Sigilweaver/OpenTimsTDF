@@ -57,8 +57,10 @@ fn main() -> ExitCode {
     let calib = reader.calibration().ok();
     if let Some(c) = calib {
         println!(
-            "calibration: mz = ({:.6} + {:.6e} * tof)^2   1/K0 = {:.6} + {:.6e} * scan",
-            c.mz_intercept, c.mz_slope, c.im_intercept, c.im_slope
+            "calibration: mz model = {}   1/K0 = {:.6} + {:.6e} * scan",
+            c.mz_model(),
+            c.im_intercept,
+            c.im_slope
         );
     }
     for p in peaks.iter().take(10) {

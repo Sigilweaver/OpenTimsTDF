@@ -82,14 +82,19 @@ full quickstart, guide, and format specification.
 
 ## Known issues
 
-- **m/z values use an approximate calibration.** `calibration()` builds the
-  TOF to m/z mapping from the acquisition m/z range in the bundle's metadata
-  rather than from its calibration data, and those values can be off by up
-  to about 15000 ppm, depending on the bundle (see the
-  [calibration notes](https://sigilweaver.app/opentimstdf/docs/format/calibration)).
-  Do not rely on these m/z values for accurate-mass work: recalibrate
-  against known masses (most search engines have a mass recalibration step)
-  or use wide m/z tolerances.
+- **m/z accuracy is limited to the bundle's stored calibration.** m/z is
+  computed from the bundle's `MzCalibration` table (about 1 ppm median
+  against the bundle's precursor m/z values on the tested bundles). No
+  temperature correction is applied, so drift since the instrument was
+  calibrated shows up directly (9 to 18 ppm on one tested bundle).
+  Bundles without a usable `MzCalibration` table (for example older
+  `ModelType = 2` bundles) fall back to a range-based model that can be off
+  by hundreds of ppm; `Reader::mz_calibration_status()` and the
+  `opentimstdf.mz_calibration` run metadata key report which model was
+  used. See the
+  [calibration notes](https://sigilweaver.app/opentimstdf/docs/format/calibration).
+  For accurate-mass work below about 5 ppm, recalibrate against known
+  masses.
 
 ## License
 
