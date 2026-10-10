@@ -16,6 +16,7 @@ categories.workspace = true
 unsafe_code = "forbid"
 
 [dependencies]
+log = "0.4"
 thiserror = "2"
 rusqlite = { version = "0.40", features = ["bundled"] }
 zstd = "0.14"
