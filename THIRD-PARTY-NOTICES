@@ -1,0 +1,108 @@
+OpenTimsTDF third-party notices
+===============================
+
+OpenTimsTDF is licensed under the Apache License, Version 2.0 (see
+LICENSE). Parts of its source code were ported from, or modeled on, the
+open-source projects listed below. This file reproduces the copyright
+notices and license terms those projects require, and lists what was
+taken from each and how it was changed.
+
+The test datasets used by the project are credited separately in
+ATTRIBUTION.md. Dependencies pulled in through Cargo or PyPI carry their
+own license files and are not listed here.
+
+
+1. AlphaTims
+------------
+
+Project:    AlphaTims
+Repository: https://github.com/MannLabs/alphatims
+License:    Apache License, Version 2.0
+            https://github.com/MannLabs/alphatims/blob/main/LICENSE.txt
+Copyright:  Copyright 2020 MannLabs
+
+The full text of the Apache License, Version 2.0 is the same text as the
+LICENSE file distributed with OpenTimsTDF.
+
+Ported items (from alphatims/bruker.py, as of release v1.0.10):
+
+  a. parse_decompressed_bruker_binary_type1()
+     -> crates/opentimstdf/src/codec.rs, decode_codec1()
+     Codec 1 per-scan signed-int32 TOF-delta / intensity walk.
+
+  b. process_frame(), compression_type == 1 branch
+     -> crates/opentimstdf/src/reader.rs, Reader::decode_peaks_codec1()
+     Codec 1 frame header (bin_size, scan_count), scan offset table and
+     its rebasing by 8 + 4 * (scan_count + 1).
+
+  c. TimsTOF._import_data_from_d_folder(), metadata-based m/z estimate
+     -> crates/opentimstdf/src/reader.rs, Reader::calibration()
+     Linear-in-sqrt(m/z) model between MzAcqRangeLower and
+     MzAcqRangeUpper over DigitizerNumSamples, with the 5 m/z widening
+     for "Bruker otofControl". OpenTimsTDF follows the OpenTIMS
+     implementation of this model (item 2b below).
+
+Changes made by OpenTimsTDF: translated from Python/Numba to Rust;
+emitted TOF indices are 0-based (tof - 1); all reads are bounds-checked
+and malformed input returns an error instead of panicking; LZF
+decompression is done by OpenTimsTDF's own decoder instead of the
+python-lzf package.
+
+
+2. OpenTIMS
+-----------
+
+Project:    OpenTIMS (opentims++)
+Repository: https://github.com/michalsta/opentims
+License:    MIT License
+            https://github.com/michalsta/opentims/blob/master/LICENCE
+
+Ported items (from src/opentims++/):
+
+  a. tof2mz_converter.cpp, OpenSourceTof2MzConverter and
+     scan2inv_ion_mobility_converter.cpp, OpenSourceScan2ImConverter
+     -> crates/opentimstdf/src/calibration.rs, Calibration
+     tof_to_mz / mz_to_tof and scan_to_inv_mobility /
+     inv_mobility_to_scan, including the round-half-up, clamp-at-zero
+     inverse.
+
+  b. tof2mz_converter.cpp, OpenSourceTof2MzConverterFactory::produce()
+     and scan2inv_ion_mobility_converter.cpp,
+     OpenSourceScan2ImConverterFactory::produce()
+     -> crates/opentimstdf/src/reader.rs, Reader::calibration()
+     GlobalMetadata keys used, the otofControl widening, scan_max taken
+     as MAX(Frames.NumScans), and the validity checks.
+
+  c. opentims.cpp, TimsFrame::decode()
+     -> crates/opentimstdf/src/codec.rs, decode_codec2()
+     Codec 2 scan header (peak count = header[scan + 1] / 2), TOF
+     accumulator starting at UINT32_MAX, and the last scan taking the
+     remaining peaks.
+
+Changes made by OpenTimsTDF: translated from C++ to Rust; the decoder
+is total (bounds-checked, never panics on malformed input); metadata is
+read through rusqlite; errors are returned as Rust values.
+
+OpenTIMS license text:
+
+    Copyright (C) 2020-2026 Michał Startek and Mateusz Łącki
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+    BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+    ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

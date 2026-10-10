@@ -175,8 +175,15 @@ impl Reader {
     ///
     /// Uses `GlobalMetadata` acquisition-range values (`MzAcqRangeLower/Upper`,
     /// `DigitizerNumSamples`, `OneOverK0AcqRangeLower/Upper`) to construct the
-    /// linear-in-sqrt(m/z) and linear 1/K0 approximation implemented by
-    /// `opentims` (BSD-2-Clause). This model is the same for all frames,
+    /// linear-in-sqrt(m/z) and linear 1/K0 approximation. Ported from OpenTIMS
+    /// `src/opentims++/tof2mz_converter.cpp` and
+    /// `src/opentims++/scan2inv_ion_mobility_converter.cpp` (the
+    /// `OpenSource*ConverterFactory::produce()` functions; MIT License,
+    /// Copyright (C) 2020-2026 Michal Startek and Mateusz Lacki); the m/z
+    /// model and the otofControl widening originate in AlphaTims
+    /// `alphatims/bruker.py`, `TimsTOF._import_data_from_d_folder()`
+    /// (Apache License 2.0, Copyright 2020 MannLabs). Changes: rewritten in
+    /// Rust. See THIRD-PARTY-NOTICES. This model is the same for all frames,
     /// including dual-polarity bundles - per-polarity differentiation requires
     /// the proprietary Bruker polynomial model (SPEC §11 `[open]`).
     ///
@@ -552,6 +559,10 @@ impl Reader {
         Ok(decode_codec2(&inner, frame.num_scans, frame.num_peaks))
     }
 
+    // Frame header and scan offset table layout ported from AlphaTims
+    // `alphatims/bruker.py`, `process_frame()` compression_type 1 branch
+    // (Apache License 2.0, Copyright 2020 MannLabs). Changes: rewritten in
+    // Rust, bounds-checked. See THIRD-PARTY-NOTICES.
     fn decode_peaks_codec1(&self, frame: &Frame) -> Result<Vec<Peak>> {
         let f = &self.tdf_bin;
 

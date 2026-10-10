@@ -13,7 +13,7 @@ variant, built from the acquisition m/z range, can be off by up to
 ## TOF -> m/z (boundary variant)
 
 Follows the OpenSource model implemented by `opentims`
-(`tof2mz_converter.cpp`, BSD-2-Clause):
+(`tof2mz_converter.cpp`, MIT):
 
 ```
 mz_min  = GlobalMetadata.MzAcqRangeLower
@@ -81,7 +81,7 @@ page.)
 ## Scan -> 1/K0 (linear)
 
 Follows the OpenSource model implemented by `opentims`
-(`scan2inv_ion_mobility_converter.cpp`, BSD-2-Clause):
+(`scan2inv_ion_mobility_converter.cpp`, MIT):
 
 ```
 im_min    = GlobalMetadata.OneOverK0AcqRangeLower

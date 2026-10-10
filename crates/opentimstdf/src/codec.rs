@@ -64,6 +64,10 @@ pub fn checked_block_len(file_len: u64, offset: u64, claimed_len: u64) -> Option
     usize::try_from(claimed_len).ok()
 }
 
+// Modeled on OpenTIMS `src/opentims++/opentims.cpp`, `TimsFrame::decode()`
+// (MIT License, Copyright (C) 2020-2026 Michal Startek and Mateusz Lacki).
+// Changes: rewritten in Rust and made total (bounds-checked). See
+// THIRD-PARTY-NOTICES.
 /// De-transpose and decode a codec-2 inner buffer. See SPEC §4.4.
 ///
 /// This is total: any `inner`, `num_scans`, `num_peaks` combination returns
@@ -154,7 +158,10 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
 ///   previous value was also an intensity, bump `tof += 1`.
 /// * negative value → advance `tof` by `-value`.
 ///
-/// Ported from alphatims' `parse_decompressed_bruker_binary_type1`.
+/// Ported from AlphaTims `alphatims/bruker.py`,
+/// `parse_decompressed_bruker_binary_type1()` (Apache License 2.0,
+/// Copyright 2020 MannLabs). Changes: rewritten in Rust, emits 0-based TOF
+/// indices, bounds-checked. See THIRD-PARTY-NOTICES.
 pub fn decode_codec1(
     compressed: &[u8],
     scan_offsets: &[usize],
