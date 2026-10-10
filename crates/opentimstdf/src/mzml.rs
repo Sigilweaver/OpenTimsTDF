@@ -34,7 +34,7 @@
 //! unique).
 //!
 //! Frames with `msms_type` other than 0/8/9 (e.g. PRM-PASEF = 10) are
-//! skipped for now. `iter_spectra` decodes one frame at a time as the
+//! skipped. `iter_spectra` decodes one frame at a time as the
 //! iterator is driven; a frame that fails to decode is skipped rather than
 //! aborting the whole run, per [`msc::SpectrumSource::iter_spectra`]'s
 //! "skip silently" contract - the canonical writer trusts whatever the
@@ -502,9 +502,8 @@ pub struct OwnedTdfSource {
 // prm-PASEF, `2` = legacy MRM/PRM). They therefore diverge on every MS1
 // survey frame of a PASEF/dia run: the conformance corpus bundle
 // `NQO1-F107C_coi-N2-P_200-0C_3996.d` has Frame 1 with `ScanMode = 8`
-// (PASEF acquisition) and `MsMsType = 0` (MS1). A cross-check assertion was
-// tried here (see git history) but is invalid for exactly this reason.
-// `scan_mode` remains decoded and exposed via the Python bindings as the
+// (PASEF acquisition) and `MsMsType = 0` (MS1), so a cross-check
+// assertion between the two would be invalid. `scan_mode` is decoded and exposed via the Python bindings as the
 // per-run acquisition-mode tag; it just carries no per-frame dispatch
 // information. See `docs/docs/format/01-tdf-sqlite-schema.md`.
 
@@ -1241,12 +1240,8 @@ mod tests {
         assert_eq!(rm.acquisition_software_version, None);
     }
 
-    // Regression test: the lookup table in `instrument_cv` previously
-    // carried several transcription errors against the real PSI-MS CV
-    // (psi-ms.obo) - most seriously, "impact" resolved to MS:1001581,
-    // which is actually "FAIMS compensation voltage", not a Bruker
-    // instrument model. Every (name, accession) pair here was checked
-    // against psi-ms.obo directly, not copied from the prior table.
+    // Every (name, accession) pair here is checked against the PSI-MS CV
+    // (psi-ms.obo) directly.
     #[test]
     fn instrument_cv_resolves_known_models_to_correct_psi_ms_accessions() {
         let cases = [

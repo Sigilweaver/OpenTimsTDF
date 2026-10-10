@@ -90,8 +90,7 @@ impl Reader {
             .parse()
             .map_err(|_| Error::UnsupportedCodec(raw_ct.clone()))?;
         // Codec-1-only metadata: some codec-2 bundles omit this key entirely,
-        // so a missing row must default to 0 rather than fail Reader::open
-        // (matches the old lazy per-call lookup's tolerance, just eagerly).
+        // so a missing row must default to 0 rather than fail Reader::open.
         let max_num_peaks_per_scan: u32 = conn
             .query_row(
                 "SELECT Value FROM GlobalMetadata WHERE Key='MaxNumPeaksPerScan'",

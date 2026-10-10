@@ -82,15 +82,14 @@ full quickstart, guide, and format specification.
 
 ## Known issues
 
-- **m/z values use an approximate calibration.** `calibration()` currently
-  builds the TOF to m/z mapping from the acquisition m/z range in the
-  bundle's metadata rather than from its calibration data, and those values
-  can be off by up to about 15000 ppm, depending on the bundle (see the
+- **m/z values use an approximate calibration.** `calibration()` builds the
+  TOF to m/z mapping from the acquisition m/z range in the bundle's metadata
+  rather than from its calibration data, and those values can be off by up
+  to about 15000 ppm, depending on the bundle (see the
   [calibration notes](https://sigilweaver.app/opentimstdf/docs/format/calibration)).
-  A fix that fits the calibration from the bundle's own reference peaks is
-  in progress. Until it lands, do not rely on these m/z values for
-  accurate-mass work: recalibrate against known masses (most search engines
-  have a mass recalibration step) or use wide m/z tolerances.
+  Do not rely on these m/z values for accurate-mass work: recalibrate
+  against known masses (most search engines have a mass recalibration step)
+  or use wide m/z tolerances.
 
 ## License
 

@@ -6,10 +6,10 @@
 /// This is NOT the proprietary polynomial model carried in
 /// `MzCalibration` / `TimsCalibration`. `Reader::calibration()` builds the
 /// m/z side from the acquisition m/z range in `GlobalMetadata` (the
-/// "boundary variant" in the format docs), which the docs record as off by
-/// up to ~15000 ppm on some bundles. The < 2 ppm figure in the docs applies
-/// to the regressed variant fitted from `CalibrationInfo`, which is not
-/// implemented yet.
+/// "boundary variant" in the format docs), which can be off by up to
+/// ~15000 ppm on some bundles. The < 2 ppm figure in the docs applies to the
+/// regressed variant fitted from `CalibrationInfo`, which is not
+/// implemented.
 #[derive(Debug, Clone, Copy)]
 pub struct Calibration {
     /// `sqrt(mz) = mz_intercept + mz_slope * tof`

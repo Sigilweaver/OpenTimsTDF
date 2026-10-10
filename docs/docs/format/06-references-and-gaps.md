@@ -37,7 +37,7 @@ database but the functional form is not publicly documented. The
 open-source linear approximation achieves < 2 ppm for typical
 acquisitions when fitted from `CalibrationInfo` (see
 [04-calibration.md](04-calibration.md#tof---mz-regressed-variant)).
-OpenTimsTDF does not implement that fit yet; it uses the boundary
+OpenTimsTDF does not implement that fit; it uses the boundary
 variant, which can be off by up to ~15000 ppm.
 
 **`TimsCalibration` voltage polynomial (ModelType=2).** A proprietary

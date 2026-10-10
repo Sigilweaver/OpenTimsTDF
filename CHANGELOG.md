@@ -40,14 +40,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   so every bundle test always skipped. Paths now resolve from the repo root.
 - Publish workflow: a failed `cargo publish` now fails the job instead of
   being ignored.
-
-### Documentation
-
-- Corrected m/z calibration accuracy claims. `Reader::calibration()`
-  implements only the range-based (boundary) model, which the format notes
-  record as off by up to ~15000 ppm on some bundles. The < 2 ppm figure applies
-  to the `CalibrationInfo` fit, which is not implemented yet. The calibration
-  guide also described tables the reader does not read.
+- Docs: m/z calibration accuracy claims. `Reader::calibration()` implements
+  only the range-based (boundary) model, off by up to ~15000 ppm on some
+  bundles; the < 2 ppm figure applies to the `CalibrationInfo` fit, which is
+  not implemented. The calibration guide described tables the reader does
+  not read.
 
 ## [2.0.0] - 2026-09-28
 

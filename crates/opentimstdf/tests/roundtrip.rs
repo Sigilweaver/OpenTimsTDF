@@ -157,7 +157,7 @@ fn pride_pxd039066_schema37_single_peak_frames() {
 
 #[test]
 fn frame_metadata_fields_populated() {
-    // Frame now exposes time, scan_mode, msms_type, accumulation_time.
+    // Frame exposes time, scan_mode, msms_type, accumulation_time.
     // Verify on the codec-2 DDA bundle we always have available.
     let Some(dir) = common::pride_bundle(PXD027359) else {
         return;
@@ -384,7 +384,7 @@ fn prm_pasef_pxd028279_frame_distribution() {
 
 #[test]
 fn concurrent_decode_across_threads_matches_sequential() {
-    // Reader::decode_peaks no longer takes a lock internally (positional
+    // Reader::decode_peaks takes no lock internally (positional
     // reads via read_at instead of a shared Mutex<File> seek cursor), so
     // many threads sharing one &Reader should be able to decode different
     // frames in parallel and get identical results to sequential decoding.

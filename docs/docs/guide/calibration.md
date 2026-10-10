@@ -29,9 +29,9 @@ reference peaks are not used.
 
 This range-based m/z model is approximate. The format notes record
 errors of up to ~15000 ppm on some bundles; the size depends on the
-bundle. A calibration fitted from `CalibrationInfo` (< 2 ppm on the
-tested bundles) is planned but not implemented yet. For accurate-mass
-work, recalibrate against known masses or use wide m/z tolerances.
+bundle. The calibration fitted from `CalibrationInfo` (< 2 ppm on the
+tested bundles) is not implemented. For accurate-mass work, recalibrate
+against known masses or use wide m/z tolerances.
 
 For details of the calibration tables and the exact mathematical model,
 see the format spec:
