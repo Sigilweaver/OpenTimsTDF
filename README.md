@@ -95,5 +95,7 @@ full quickstart, guide, and format specification.
 
 Apache-2.0. See [LICENSE](LICENSE).
 
-The TDF format and codecs were worked out from public sample data
-(PRIDE accessions). See [ATTRIBUTION.md](ATTRIBUTION.md).
+The TDF format was worked out from public sample data (PRIDE accessions).
+See [ATTRIBUTION.md](ATTRIBUTION.md). Codec 1 decoding is ported from
+AlphaTims and the codec 2 decode loop follows OpenTIMS; see
+[THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).

@@ -1,7 +1,10 @@
-/// Linear-in-sqrt TOF<->m/z and linear scan<->1/K0 calibration, following
-/// the open-source `opentims++` model (`tof2mz_converter.cpp`,
-/// `scan2inv_ion_mobility_converter.cpp`). See
-/// `docs/docs/format/04-calibration.md`.
+/// Linear-in-sqrt TOF<->m/z and linear scan<->1/K0 calibration, ported from
+/// OpenTIMS `src/opentims++/tof2mz_converter.cpp`
+/// (`OpenSourceTof2MzConverter`) and
+/// `src/opentims++/scan2inv_ion_mobility_converter.cpp`
+/// (`OpenSourceScan2ImConverter`), MIT License, Copyright (C) 2020-2026
+/// Michal Startek and Mateusz Lacki. Changes: rewritten in Rust. See
+/// THIRD-PARTY-NOTICES and `docs/docs/format/04-calibration.md`.
 ///
 /// This is NOT the proprietary polynomial model carried in
 /// `MzCalibration` / `TimsCalibration`. `Reader::calibration()` builds the

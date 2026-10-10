@@ -2,10 +2,10 @@
 
 ## References
 
-- **opentims** - https://github.com/michalsta/opentims (BSD-2-Clause).
+- **opentims** - https://github.com/michalsta/opentims (MIT).
   Validates the raw scan-offset header layout (codec 2 inner layout)
   and supplies the open-source linear calibration model.
-- **alphatims** - https://github.com/MannLabs/alphatims (MIT).
+- **alphatims** - https://github.com/MannLabs/alphatims (Apache-2.0).
   Documents the codec 1 frame header and delta + bit-pack scheme;
   source of the codec 1 verbatim implementation.
 - **rustims** - https://github.com/theGreatHerrLebert/rustims (MIT).
@@ -14,6 +14,10 @@
 - **Public format references** - the publicly distributed PaSER schema
   reference is consistent with what we observe on the
   `DiaFrameMsMs*` / `PasefFrameMsMsInfo` tables.
+
+Copyright notices and license terms for the ported code are in
+[`THIRD-PARTY-NOTICES`](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/THIRD-PARTY-NOTICES)
+at the repository root.
 
 ## Out-of-scope items
 
