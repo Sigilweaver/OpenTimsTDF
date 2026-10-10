@@ -1,8 +1,10 @@
 #![cfg_attr(not(test), warn(clippy::unwrap_used, clippy::expect_used))]
 //! OpenTimsTDF - Rust reader for timsTOF `.d/` (TDF) mass spectrometry bundles.
 //!
-//! The format and codecs are documented in `re/SPEC.md` (and mirrored on
-//! the docs site). Both compression codecs are supported:
+//! The format and codecs are documented in the repository under
+//! `docs/docs/format/`, published at
+//! <https://sigilweaver.app/opentimstdf/docs/>. Both compression codecs are
+//! supported:
 //!
 //! * **Codec 2** (`TimsCompressionType == 2`) - byte-transposed delta-TOF over
 //!   zstd. Used by modern acquisitions.

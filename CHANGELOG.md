@@ -24,6 +24,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Python: `Reader` computes calibration once and reuses it for
   `calibration()` and `decode_spectrum()` instead of re-querying SQLite on
   every call.
+- Removed a stray `python/Cargo.lock` (there is no `python/` crate), fixed
+  the crate docs pointing to a nonexistent `re/SPEC.md`, and ignored
+  `.claude/` and `.devcontainer/`.
 
 ### Fixed
 

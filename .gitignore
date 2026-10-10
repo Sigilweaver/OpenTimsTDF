@@ -27,6 +27,8 @@ nohup.out
 *.swo
 .idea/
 .vscode/
+.claude/
+.devcontainer/
 
 # Docusaurus
 docs/node_modules/
