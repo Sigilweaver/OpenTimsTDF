@@ -41,6 +41,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Publish workflow: a failed `cargo publish` now fails the job instead of
   being ignored.
 
+### Documentation
+
+- Corrected m/z calibration accuracy claims. `Reader::calibration()`
+  implements only the range-based (boundary) model, which the format notes
+  record as off by up to ~15000 ppm on some bundles. The < 2 ppm figure applies
+  to the `CalibrationInfo` fit, which is not implemented yet. The calibration
+  guide also described tables the reader does not read.
+
 ## [2.0.0] - 2026-09-28
 
 ### Added

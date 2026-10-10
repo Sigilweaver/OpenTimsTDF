@@ -35,8 +35,10 @@ TOF -> m/z mapping uses coefficients `C1 - C4` stored in
 `CalibrationInfo`. These coefficients are visible in the open
 database but the functional form is not publicly documented. The
 open-source linear approximation achieves < 2 ppm for typical
-acquisitions (see
+acquisitions when fitted from `CalibrationInfo` (see
 [04-calibration.md](04-calibration.md#tof---mz-regressed-variant)).
+OpenTimsTDF does not implement that fit yet; it uses the boundary
+variant, which can be off by up to ~15000 ppm.
 
 **`TimsCalibration` voltage polynomial (ModelType=2).** A proprietary
 model uses 10 coefficients stored in `CalibrationInfo` blobs

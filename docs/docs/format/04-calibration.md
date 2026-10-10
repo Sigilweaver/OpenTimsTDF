@@ -2,9 +2,14 @@
 
 `MzCalibration` and `TimsCalibration` hold proprietary polynomial
 models that are not publicly documented. OpenTimsTDF instead implements
-open-source linear-in-sqrt(m/z) and linear-in-scan models that are
-sufficient for typical analyses (< 2 ppm m/z error when calibrated
-from `CalibrationInfo`).
+open-source linear-in-sqrt(m/z) and linear-in-scan models.
+
+The m/z model has two variants. The regressed variant, fitted from
+`CalibrationInfo`, reaches < 2 ppm on the tested bundles. The boundary
+variant, built from the acquisition m/z range, can be off by up to
+~15000 ppm. **OpenTimsTDF currently implements only the boundary
+variant**, so `Reader::calibration()` m/z values carry that error until
+the regressed variant lands.
 
 ## TOF -> m/z (boundary variant)
 
@@ -41,6 +46,8 @@ PXD027359 bundle, `tof_to_mz(0) = 100.0` to within 1e-6 and
 
 ## TOF -> m/z (regressed variant)
 
+Not yet implemented by OpenTimsTDF.
+
 When `CalibrationInfo` is present (it is in all observed bundles),
 the slope and intercept can be fit directly from ground-truth pairs:
 
@@ -59,7 +66,9 @@ mz(tof) = (intercept + slope * tof)^2
 
 The boundary variant can be off by up to ~15000 ppm when
 `DigitizerDelay` is large relative to the digitizer range; it should
-be used only as a fallback when `CalibrationInfo` is absent.
+be used only as a fallback when `CalibrationInfo` is absent. (It is
+currently the only variant OpenTimsTDF implements; see the note at the
+top of this page.)
 
 ### MzCalibration field meanings (open-source perspective)
 

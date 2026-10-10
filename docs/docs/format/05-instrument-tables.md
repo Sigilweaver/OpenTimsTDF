@@ -210,7 +210,8 @@ values; `len_bytes / 8` is the number of reference peaks.
 
 See [04-calibration.md](04-calibration.md#tof---mz-regressed-variant)
 for how `MeasuredTimesOfFlight` and `ReferencePeakMasses` together
-yield a < 2 ppm m/z calibration.
+yield a < 2 ppm m/z calibration (not yet implemented by OpenTimsTDF,
+which currently uses the boundary variant).
 
 ## `FrameProperties` / `PropertyDefinitions`
 

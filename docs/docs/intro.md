@@ -32,7 +32,7 @@ bindings via [`opentimstdf-py`](./install).
 | `analysis.tdf_bin` block stream                      | supported |
 | Codec 2 (zstd + byte-transpose + delta) frame decode | supported |
 | Codec 1 (LZF + signed-delta) frame decode            | supported |
-| TOF to m/z + scan to 1/K0 calibration                | supported (linear-in-sqrt(m/z) model) |
+| TOF to m/z + scan to 1/K0 calibration                | supported (approximate linear-in-sqrt(m/z) model, see [Calibration](./guide/calibration)) |
 | diaPASEF window metadata                             | supported |
 | PASEF DDA precursors + MS/MS info                    | supported |
 | prm-PASEF targets + per-frame info                   | supported |
