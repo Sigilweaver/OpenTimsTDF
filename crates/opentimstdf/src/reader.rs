@@ -155,6 +155,23 @@ impl Reader {
         })
     }
 
+    /// Instrument serial number from `GlobalMetadata.InstrumentSerialNumber`.
+    /// `None` when the key is absent or blank.
+    pub fn instrument_serial_number(&self) -> Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT Value FROM GlobalMetadata WHERE Key = 'InstrumentSerialNumber'",
+                [],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty()))
+    }
+
     /// Build the open-source calibration object for this bundle (SPEC §5 and §6).
     ///
     /// Uses `GlobalMetadata` acquisition-range values (`MzAcqRangeLower/Upper`,

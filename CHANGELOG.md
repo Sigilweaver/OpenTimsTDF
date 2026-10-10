@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- `Reader::instrument_serial_number()`. mzML run metadata now carries the
+  instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
+  bundle records one.
+
 ### Changed
 
 - The `analysis.tdf_bin` file length is read once in `Reader::open` instead
@@ -16,6 +22,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
   frame header, instead of decoding the wrong bytes.
 - Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.
+- mzML: diaPASEF spectra no longer report the isolation window center as the
+  selected ion m/z. The isolation window target and width are kept; the
+  selected ion is left empty because a DIA window has no single precursor.
 
 ## [2.0.0] - 2026-09-28
 

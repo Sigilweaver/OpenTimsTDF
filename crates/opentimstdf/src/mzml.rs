@@ -369,9 +369,13 @@ fn build_dia_ms2(
         high_mz: 0.0,
         inv_mobility: None,
     });
+    // diaPASEF windows co-isolate many precursors, so there is no single
+    // selected ion. Report the isolation window (target + width) only and
+    // leave `selected_mz` empty rather than inventing one at the window
+    // center.
     let precursor = Some(msc::PrecursorInfo {
         target_mz: Some(window.isolation_mz),
-        selected_mz: Some(window.isolation_mz),
+        selected_mz: None,
         isolation_width: Some(window.isolation_width),
         charge: None,
         intensity: None,
@@ -427,6 +431,7 @@ pub struct TdfSource<'a> {
     reader: &'a Reader,
     bundle_name: String,
     metadata: Metadata,
+    instrument_serial_number: Option<String>,
     calibration: Calibration,
     frames: Vec<Frame>,
 }
@@ -436,12 +441,14 @@ impl<'a> TdfSource<'a> {
     /// name (used as the `<sourceFile name="...">` in mzML output).
     pub fn new(reader: &'a Reader, bundle_name: impl Into<String>) -> Result<Self> {
         let metadata = reader.metadata()?;
+        let instrument_serial_number = reader.instrument_serial_number()?;
         let calibration = reader.calibration()?;
         let frames = reader.frames()?;
         Ok(Self {
             reader,
             bundle_name: bundle_name.into(),
             metadata,
+            instrument_serial_number,
             calibration,
             frames,
         })
@@ -454,6 +461,7 @@ impl<'a> TdfSource<'a> {
         let path = path.as_ref();
         let reader = Reader::open(path)?;
         let metadata = reader.metadata()?;
+        let instrument_serial_number = reader.instrument_serial_number()?;
         let calibration = reader.calibration()?;
         let frames = reader.frames()?;
         let bundle_name = path
@@ -464,6 +472,7 @@ impl<'a> TdfSource<'a> {
             reader,
             bundle_name,
             metadata,
+            instrument_serial_number,
             calibration,
             frames,
         })
@@ -476,6 +485,7 @@ pub struct OwnedTdfSource {
     reader: Reader,
     bundle_name: String,
     metadata: Metadata,
+    instrument_serial_number: Option<String>,
     calibration: Calibration,
     frames: Vec<Frame>,
 }
@@ -625,7 +635,11 @@ fn frame_iter<'s>(
     })
 }
 
-fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
+fn run_metadata_for(
+    meta: &Metadata,
+    bundle_name: &str,
+    instrument_serial_number: Option<&str>,
+) -> msc::RunMetadata {
     let mut extra = ::std::collections::BTreeMap::new();
     extra.insert(
         "opentimstdf.schema_version_major".into(),
@@ -652,7 +666,7 @@ fn run_metadata_for(meta: &Metadata, bundle_name: &str) -> msc::RunMetadata {
         source_file_format: source_file_format_cv(),
         native_id_format: native_id_format_cv(),
         instrument: instrument_cv(meta),
-        instrument_serial_number: None,
+        instrument_serial_number: instrument_serial_number.map(str::to_string),
         software_name: SOFTWARE_NAME.into(),
         software_version: SOFTWARE_VERSION.into(),
         // `Metadata::acquisition_software`/`acquisition_software_version` are
@@ -889,7 +903,11 @@ fn chromatogram_records_for_source(
 
 impl<'a> msc::SpectrumSource for TdfSource<'a> {
     fn run_metadata(&self) -> msc::RunMetadata {
-        run_metadata_for(&self.metadata, &self.bundle_name)
+        run_metadata_for(
+            &self.metadata,
+            &self.bundle_name,
+            self.instrument_serial_number.as_deref(),
+        )
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
         Box::new(frame_iter(self.reader, &self.frames, &self.calibration))
@@ -903,7 +921,11 @@ impl<'a> msc::SpectrumSource for TdfSource<'a> {
 
 impl msc::SpectrumSource for OwnedTdfSource {
     fn run_metadata(&self) -> msc::RunMetadata {
-        run_metadata_for(&self.metadata, &self.bundle_name)
+        run_metadata_for(
+            &self.metadata,
+            &self.bundle_name,
+            self.instrument_serial_number.as_deref(),
+        )
     }
     fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
         Box::new(frame_iter(&self.reader, &self.frames, &self.calibration))
@@ -1114,7 +1136,12 @@ mod tests {
         };
 
         let rec = build_dia_ms2(1, &frame, &window, &peaks, &cal);
-        assert_eq!(rec.precursor.as_ref().unwrap().precursor_native_id, None);
+        let prec = rec.precursor.as_ref().unwrap();
+        assert_eq!(prec.precursor_native_id, None);
+        // DIA: isolation window only, no selected ion.
+        assert_eq!(prec.selected_mz, None);
+        assert_eq!(prec.target_mz, Some(500.0));
+        assert_eq!(prec.isolation_width, Some(2.0));
         assert_eq!(
             rec.inv_mobility_per_peak.as_ref().map(Vec::len),
             Some(peaks.len())
@@ -1164,7 +1191,7 @@ mod tests {
     #[test]
     fn run_metadata_for_wires_up_start_timestamp() {
         let meta = sample_metadata(Some("2018-08-21T20:40:14.356+02:00"));
-        let rm = run_metadata_for(&meta, "bundle.d");
+        let rm = run_metadata_for(&meta, "bundle.d", None);
         assert_eq!(
             rm.start_timestamp.as_deref(),
             Some("2018-08-21T20:40:14.356+02:00")
@@ -1174,7 +1201,7 @@ mod tests {
     #[test]
     fn run_metadata_for_none_when_absent() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d");
+        let rm = run_metadata_for(&meta, "bundle.d", None);
         assert_eq!(rm.start_timestamp, None);
     }
 
@@ -1183,16 +1210,25 @@ mod tests {
         // Defensive path: don't claim RFC 3339 compliance for a value that
         // isn't, even though no real-world bundle observed so far hits this.
         let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
-        let rm = run_metadata_for(&meta, "bundle.d");
+        let rm = run_metadata_for(&meta, "bundle.d", None);
         assert_eq!(rm.start_timestamp, None);
     }
 
     #[test]
     fn run_metadata_for_wires_up_acquisition_software() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d");
+        let rm = run_metadata_for(&meta, "bundle.d", None);
         assert_eq!(rm.acquisition_software_name.as_deref(), Some("timsControl"));
         assert_eq!(rm.acquisition_software_version.as_deref(), Some("2.0.18"));
+    }
+
+    #[test]
+    fn run_metadata_for_passes_through_serial_number() {
+        let meta = sample_metadata(None);
+        let rm = run_metadata_for(&meta, "bundle.d", Some("1234567.10"));
+        assert_eq!(rm.instrument_serial_number.as_deref(), Some("1234567.10"));
+        let rm = run_metadata_for(&meta, "bundle.d", None);
+        assert_eq!(rm.instrument_serial_number, None);
     }
 
     #[test]
@@ -1200,7 +1236,7 @@ mod tests {
         let mut meta = sample_metadata(None);
         meta.acquisition_software = String::new();
         meta.acquisition_software_version = String::new();
-        let rm = run_metadata_for(&meta, "bundle.d");
+        let rm = run_metadata_for(&meta, "bundle.d", None);
         assert_eq!(rm.acquisition_software_name, None);
         assert_eq!(rm.acquisition_software_version, None);
     }
