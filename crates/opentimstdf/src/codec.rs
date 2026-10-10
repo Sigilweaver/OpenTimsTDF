@@ -204,7 +204,7 @@ pub fn decode_codec1(
                 });
                 prev_was_intensity = true;
             } else {
-                tof = tof.wrapping_add((-v) as u32);
+                tof = tof.wrapping_add(v.unsigned_abs());
                 prev_was_intensity = false;
             }
         }

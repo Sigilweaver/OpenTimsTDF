@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- The `analysis.tdf_bin` file length is read once in `Reader::open` instead
+  of once per decoded frame.
+
+### Fixed
+
+- Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
+  frame header, instead of decoding the wrong bytes.
+- Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.
+
 ## [2.0.0] - 2026-09-28
 
 ### Added
