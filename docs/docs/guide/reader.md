@@ -27,7 +27,11 @@ stream).
 | `bundle_dir()`                        | `&Path`                           | The path the reader was opened on. |
 | `metadata()`                          | `Result<Metadata>`                | All `GlobalMetadata` rows decoded into a struct. |
 | `compression_type()`                  | `u32`                             | `1` (LZF) or `2` (zstd). |
-| `calibration()`                       | `Result<Calibration>`             | TOF/m/z and scan/(1/K0) calibrators (see [Calibration](./calibration)). |
+| `calibration()`                       | `Result<Calibration>`             | TOF/m/z and scan/(1/K0) calibrators for the most-referenced `MzCalibration` row (see [Calibration](./calibration)). |
+| `bundle_calibration()`                | `Result<BundleCalibration>`       | Calibration per `MzCalibration` row; `for_frame(&frame)` picks a frame's row. |
+| `mz_calibration_model()`              | `Result<MzCalibrationModel>`      | `Tables` or `RangeFallback`. |
+| `mz_calibration_status()`             | `Result<MzCalibrationStatus>`     | Model plus the reason when the range fallback is used. |
+| `range_fallback_calibration()`        | `Result<Calibration>`             | The range-fallback model, built even when the tables are usable (for comparison). |
 | `frame(id)`                           | `Result<Frame>`                   | A single frame's index row. |
 | `frames()`                            | `Result<Vec<Frame>>`              | All frames in ascending id order. |
 | `decode_peaks(&frame)`                | `Result<Vec<Peak>>`               | Decode a frame's payload to `(scan, tof, intensity)` peaks. See [Peaks and codecs](./peaks-and-codecs). |

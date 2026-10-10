@@ -96,18 +96,18 @@ One row per calibration ID. All corpus bundles have at least one row.
 
 ```
 Id                INTEGER  primary key
-ModelType         INTEGER  always 1 (TOF polynomial model)
-DigitizerTimebase REAL     digitizer sample interval in ns (observed: 0.2)
-DigitizerDelay    REAL     digitizer delay in samples (observed: ~25000-44000)
-T1                REAL     TOF correction coefficient 1
-T2                REAL     TOF correction coefficient 2
-dC1               REAL     distortion correction 1 (often 20.0-21.0)
-dC2               REAL     distortion correction 2 (often 0.0)
-C0                REAL     polynomial coefficient 0 (offset)
-C1                REAL     polynomial coefficient 1 (linear term)
-C2                REAL     polynomial coefficient 2 (quadratic term)
-C3                REAL     polynomial coefficient 3 (often 0.0)
-C4                REAL     polynomial coefficient 4 (small correction)
+ModelType         INTEGER  1 in current bundles; 2 on older impacTEM bundles
+DigitizerTimebase REAL     ns per TOF index (observed: 0.2, 0.125 on timsTOF HT)
+DigitizerDelay    REAL     flight time of TOF index 0 in ns (observed: ~18000-44000)
+T1                REAL     device temperature 1 at calibration (deg C)
+T2                REAL     device temperature 2 at calibration (deg C)
+dC1               REAL     temperature coefficient for T1 (observed 0-77; not applied)
+dC2               REAL     temperature coefficient for T2 (observed -3.7-0; not applied)
+C0                REAL     flight-time offset in ns
+C1                REAL     mz = C1 * ((t - C0) * 1e-6)^2 when C2 = C4 = 0
+C2                REAL     flight-time term linear in m/z, ns per Da
+C3                REAL     unidentified; 0.0 in every observed ModelType 1 row
+C4                REAL     m/z offset inside the square root, Da
 ```
 
 Sample row (PXD027359, sv=3.5):
@@ -116,9 +116,8 @@ Sample row (PXD027359, sv=3.5):
  308.058693, 156618.35376, -0.003637, 0.0, 0.045331)
 ```
 
-The proprietary evaluation formula for `mz = f(tof, ...)` is not
-implemented by OpenTimsTDF. See [04-calibration.md](04-calibration.md)
-for the open-source fallback.
+See [04-calibration.md](04-calibration.md) for the TOF -> m/z formula
+built from these columns.
 
 ### `TimsCalibration`
 

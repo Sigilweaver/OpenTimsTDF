@@ -12,12 +12,13 @@ use std::sync::{
 
 use numpy::{IntoPyArray, PyArray1, PyUntypedArrayMethods};
 use openmassspec_core::{SpectrumRecord, SpectrumSource};
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyRuntimeWarning};
 use pyo3::prelude::*;
 
 use ::opentimstdf::{
-    Calibration as RsCalibration, DiaFrameWindows as RsDiaFrameWindows, DiaWindow as RsDiaWindow,
-    Frame as RsFrame, Metadata as RsMetadata, PasefMsMsInfo as RsPasefMsMsInfo, Peak as RsPeak,
+    BundleCalibration as RsBundleCalibration, Calibration as RsCalibration,
+    DiaFrameWindows as RsDiaFrameWindows, DiaWindow as RsDiaWindow, Frame as RsFrame,
+    Metadata as RsMetadata, MzConversion, PasefMsMsInfo as RsPasefMsMsInfo, Peak as RsPeak,
     Precursor as RsPrecursor, PrmMsMsInfo as RsPrmMsMsInfo, PrmTarget as RsPrmTarget,
     Reader as RsReader,
 };
@@ -310,14 +311,29 @@ struct Calibration {
 
 #[pymethods]
 impl Calibration {
+    /// `"tables"` or `"range_fallback"`.
     #[getter]
-    fn mz_intercept(&self) -> f64 {
-        self.inner.mz_intercept
+    fn mz_model(&self) -> &'static str {
+        self.inner.mz_model().as_str()
     }
 
+    /// Range-fallback intercept (`sqrt(mz) = mz_intercept + mz_slope * tof`).
+    /// `None` when `mz_model` is `"tables"`.
     #[getter]
-    fn mz_slope(&self) -> f64 {
-        self.inner.mz_slope
+    fn mz_intercept(&self) -> Option<f64> {
+        match self.inner.mz {
+            MzConversion::RangeFallback { intercept, .. } => Some(intercept),
+            MzConversion::Tables(_) => None,
+        }
+    }
+
+    /// Range-fallback slope. `None` when `mz_model` is `"tables"`.
+    #[getter]
+    fn mz_slope(&self) -> Option<f64> {
+        match self.inner.mz {
+            MzConversion::RangeFallback { slope, .. } => Some(slope),
+            MzConversion::Tables(_) => None,
+        }
     }
 
     #[getter]
@@ -347,12 +363,18 @@ impl Calibration {
     }
 
     fn __repr__(&self) -> String {
+        let mz = match self.inner.mz {
+            MzConversion::Tables(m) => format!(
+                "tables(delay={}, timebase={}, C0={}, C1={}, C2={}, C4={})",
+                m.digitizer_delay, m.digitizer_timebase, m.c0, m.c1, m.c2, m.c4
+            ),
+            MzConversion::RangeFallback { intercept, slope } => {
+                format!("range_fallback(({intercept:.6}+{slope:.6e}*tof)^2)")
+            }
+        };
         format!(
-            "Calibration(mz=({:.6}+{:.6e}*tof)^2, 1/K0={:.4}+{:.4e}*scan)",
-            self.inner.mz_intercept,
-            self.inner.mz_slope,
-            self.inner.im_intercept,
-            self.inner.im_slope,
+            "Calibration(mz={mz}, 1/K0={:.4}+{:.4e}*scan)",
+            self.inner.im_intercept, self.inner.im_slope,
         )
     }
 }
@@ -599,7 +621,7 @@ struct Reader {
     /// SQLite lookups) and reused by every later `calibration()` /
     /// `decode_spectrum()` call. Lazy so `Reader()` still opens bundles whose
     /// calibration metadata is invalid.
-    calibration: OnceLock<RsCalibration>,
+    calibration: OnceLock<RsBundleCalibration>,
 }
 
 impl Reader {
@@ -610,13 +632,26 @@ impl Reader {
             .map_err(|_| PyRuntimeError::new_err("reader lock poisoned"))
     }
 
-    /// Cached calibration, computing it with `inner` on first use.
-    fn cached_calibration(&self, inner: &RsReader) -> PyResult<RsCalibration> {
+    /// Cached calibration, computing it with `inner` on first use. Emits a
+    /// `RuntimeWarning` with the reason when the bundle uses the range
+    /// fallback for m/z.
+    fn cached_calibration(&self, inner: &RsReader) -> PyResult<&RsBundleCalibration> {
         if let Some(cal) = self.calibration.get() {
-            return Ok(*cal);
+            return Ok(cal);
         }
-        let cal = inner.calibration().map_err(to_py_err)?;
-        Ok(*self.calibration.get_or_init(|| cal))
+        let cal = inner.bundle_calibration().map_err(to_py_err)?;
+        if let Some(reason) = &cal.status.fallback_reason {
+            Python::attach(|py| {
+                let msg = std::ffi::CString::new(format!(
+                    "{}: m/z uses the acquisition-range fallback model, which can be off by \
+                     hundreds of ppm: {reason}",
+                    self.bundle_dir.display()
+                ))
+                .unwrap_or_default();
+                PyErr::warn(py, &py.get_type::<PyRuntimeWarning>(), &msg, 1)
+            })?;
+        }
+        Ok(self.calibration.get_or_init(|| cal))
     }
 }
 
@@ -694,10 +729,29 @@ impl Reader {
         Ok(self.locked_inner()?.metadata().map_err(to_py_err)?.into())
     }
 
+    /// Calibration for the `MzCalibration` row referenced by the most frames.
+    /// `decode_spectrum` converts each frame with its own row.
     fn calibration(&self) -> PyResult<Calibration> {
         let guard = self.locked_inner()?;
-        let inner = self.cached_calibration(&guard)?;
+        let inner = *self.cached_calibration(&guard)?.primary();
         Ok(Calibration { inner })
+    }
+
+    /// Which TOF -> m/z model the bundle uses: `"tables"` or
+    /// `"range_fallback"`.
+    fn mz_calibration_model(&self) -> PyResult<&'static str> {
+        let guard = self.locked_inner()?;
+        Ok(self.cached_calibration(&guard)?.status.model.as_str())
+    }
+
+    /// Why the calibration tables could not be used, or `None` when they are.
+    fn mz_calibration_fallback_reason(&self) -> PyResult<Option<String>> {
+        let guard = self.locked_inner()?;
+        Ok(self
+            .cached_calibration(&guard)?
+            .status
+            .fallback_reason
+            .clone())
     }
 
     fn frame(&self, id: u32) -> PyResult<Frame> {
@@ -746,7 +800,7 @@ impl Reader {
     /// lock acquisition.
     fn decode_spectrum(&self, py: Python<'_>, frame: &Frame) -> PyResult<DecodedSpectrum> {
         let guard = self.locked_inner()?;
-        let cal = self.cached_calibration(&guard)?;
+        let bundle_cal = self.cached_calibration(&guard)?;
         let rs_frame = RsFrame {
             id: frame.id,
             time: frame.time,
@@ -761,6 +815,7 @@ impl Reader {
             summed_intensities: frame.summed_intensities,
             max_intensity: frame.max_intensity,
         };
+        let cal = bundle_cal.for_frame(&rs_frame);
         let peaks = guard.decode_peaks(&rs_frame).map_err(to_py_err)?;
         let n = peaks.len();
         let mut mz = Vec::with_capacity(n);

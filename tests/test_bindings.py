@@ -22,6 +22,18 @@ def test_canonical_records():
     assert run["source_file_format"]["accession"]
     assert "opentimstdf.schema_version_major" in run["extra"]
 
+    model = reader.mz_calibration_model()
+    assert model in {"tables", "range_fallback"}
+    assert run["extra"]["opentimstdf.mz_calibration"] == model
+    reason = reader.mz_calibration_fallback_reason()
+    assert (reason is None) == (model == "tables")
+    calib = reader.calibration()
+    assert calib.mz_model == model
+    if model == "tables":
+        assert calib.mz_intercept is None and calib.mz_slope is None
+    tof = 100_000
+    assert abs(calib.mz_to_tof(calib.tof_to_mz(tof)) - tof) <= 1
+
     record = next(reader.iter_records())
     assert record["native_id"]
     assert len(record["mz"]) == len(record["intensity"])

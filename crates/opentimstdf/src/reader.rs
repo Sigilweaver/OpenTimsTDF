@@ -1,10 +1,15 @@
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
 
-use crate::calibration::Calibration;
+use crate::calibration::{
+    BundleCalibration, Calibration, MzCalibrationModel, MzCalibrationStatus, MzConversion,
+    TablesMzModel,
+};
 use crate::codec::{checked_block_len, decode_codec1, decode_codec2, frame_from_row};
 use crate::error::{Error, Result};
 use crate::types::{
@@ -171,84 +176,113 @@ impl Reader {
             .filter(|v| !v.is_empty()))
     }
 
-    /// Build the open-source calibration object for this bundle (SPEC §5 and §6).
+    /// Calibration for the `MzCalibration` row referenced by the most frames.
     ///
-    /// Uses `GlobalMetadata` acquisition-range values (`MzAcqRangeLower/Upper`,
-    /// `DigitizerNumSamples`, `OneOverK0AcqRangeLower/Upper`) to construct the
-    /// linear-in-sqrt(m/z) and linear 1/K0 approximation implemented by
-    /// `opentims` (BSD-2-Clause). This model is the same for all frames,
-    /// including dual-polarity bundles - per-polarity differentiation requires
-    /// the proprietary Bruker polynomial model (SPEC §11 `[open]`).
-    ///
-    /// `frame.mz_calibration_id` identifies which polarity row a frame belongs
-    /// to (1 = positive, 2 = negative in dual-polarity bundles) and is available
-    /// for informational use, but does not affect the open-source calibration
-    /// computation.
+    /// Same as `self.bundle_calibration()?.primary()`. In a bundle whose
+    /// frames reference more than one `MzCalibration` row (for example
+    /// dual-polarity runs), convert each frame with
+    /// [`BundleCalibration::for_frame`] instead.
     pub fn calibration(&self) -> Result<Calibration> {
-        fn meta(conn: &Connection, key: &str) -> Result<String> {
-            Ok(conn.query_row(
-                "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
-                [key],
-                |row| row.get::<_, String>(0),
-            )?)
-        }
+        Ok(*self.bundle_calibration()?.primary())
+    }
 
+    /// Which TOF -> m/z model this bundle uses (see
+    /// [`Reader::bundle_calibration`]).
+    pub fn mz_calibration_model(&self) -> Result<MzCalibrationModel> {
+        Ok(self.bundle_calibration()?.status.model)
+    }
+
+    /// The m/z model this bundle uses and, for the range fallback, why the
+    /// calibration tables could not be used.
+    pub fn mz_calibration_status(&self) -> Result<MzCalibrationStatus> {
+        Ok(self.bundle_calibration()?.status)
+    }
+
+    /// Build the calibration for every `MzCalibration` row the bundle's
+    /// frames reference (`docs/docs/format/04-calibration.md`).
+    ///
+    /// m/z uses [`TablesMzModel`] built from each referenced
+    /// `MzCalibration` row. When the table is absent, a referenced row is
+    /// missing, or any referenced row is unusable (`ModelType` other than 1,
+    /// non-zero `C3`, non-numeric or out-of-range values), the whole bundle
+    /// uses the range fallback instead, the reason is stored in
+    /// [`MzCalibrationStatus::fallback_reason`], and a warning is logged
+    /// through the `log` crate.
+    ///
+    /// 1/K0 is linear between `GlobalMetadata.OneOverK0AcqRangeUpper` (scan
+    /// 0) and `OneOverK0AcqRangeLower` (scan `MAX(Frames.NumScans)`).
+    ///
+    /// Errors when the mobility range metadata is invalid, or when the
+    /// range fallback is needed and the m/z range metadata is invalid.
+    pub fn bundle_calibration(&self) -> Result<BundleCalibration> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let mut mz_min: f64 = meta(&conn, "MzAcqRangeLower")?
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-        let mut mz_max: f64 = meta(&conn, "MzAcqRangeUpper")?
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-        let tof_max: u32 = meta(&conn, "DigitizerNumSamples")?
-            .trim()
-            .parse()
-            .unwrap_or(0);
-        let acq_sw = meta(&conn, "AcquisitionSoftware").unwrap_or_default();
-        if acq_sw.trim() == "Bruker otofControl" {
-            mz_min -= 5.0;
-            mz_max += 5.0;
+
+        let (im_intercept, im_slope) = mobility_calibration(&conn)?;
+        let tof_max: Option<u32> =
+            global_meta(&conn, "DigitizerNumSamples")?.and_then(|v| v.trim().parse().ok());
+
+        match tables_mz_models(&conn, tof_max) {
+            Ok((primary_id, rows)) => {
+                let by_row: BTreeMap<u32, Calibration> = rows
+                    .into_iter()
+                    .map(|(id, m)| {
+                        let c = Calibration {
+                            mz: MzConversion::Tables(m),
+                            im_intercept,
+                            im_slope,
+                        };
+                        (id, c)
+                    })
+                    .collect();
+                let primary = by_row[&primary_id];
+                Ok(BundleCalibration::new(
+                    MzCalibrationStatus {
+                        model: MzCalibrationModel::Tables,
+                        fallback_reason: None,
+                    },
+                    primary,
+                    by_row,
+                ))
+            }
+            Err(reason) => {
+                let (intercept, slope) = range_mz_calibration(&conn).map_err(|e| match e {
+                    Error::CorruptFrame(id, msg) => Error::CorruptFrame(
+                        id,
+                        format!("{msg} (calibration tables unusable: {reason})"),
+                    ),
+                    other => other,
+                })?;
+                log::warn!(
+                    "{}: m/z uses the acquisition-range fallback model, which can be off \
+                     by hundreds of ppm: {reason}",
+                    self.bundle_dir.display()
+                );
+                let primary = Calibration {
+                    mz: MzConversion::RangeFallback { intercept, slope },
+                    im_intercept,
+                    im_slope,
+                };
+                Ok(BundleCalibration::new(
+                    MzCalibrationStatus {
+                        model: MzCalibrationModel::RangeFallback,
+                        fallback_reason: Some(reason),
+                    },
+                    primary,
+                    BTreeMap::new(),
+                ))
+            }
         }
+    }
 
-        let im_min: f64 = meta(&conn, "OneOverK0AcqRangeLower")?
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-        let im_max: f64 = meta(&conn, "OneOverK0AcqRangeUpper")?
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-        let scan_max: u32 = conn
-            .query_row("SELECT MAX(NumScans) FROM Frames", [], |row| row.get(0))
-            .unwrap_or(0);
-
-        if mz_min <= 0.0 || mz_max <= mz_min || tof_max == 0 {
-            return Err(Error::CorruptFrame(
-                0,
-                format!(
-                    "invalid m/z calibration metadata: min={mz_min} max={mz_max} tof_max={tof_max}"
-                ),
-            ));
-        }
-        if im_min <= 0.0 || im_max <= im_min || scan_max == 0 {
-            return Err(Error::CorruptFrame(
-                0,
-                format!(
-                    "invalid mobility calibration metadata: min={im_min} max={im_max} scan_max={scan_max}"
-                ),
-            ));
-        }
-
-        let mz_intercept = mz_min.sqrt();
-        let mz_slope = (mz_max.sqrt() - mz_min.sqrt()) / f64::from(tof_max);
-        let im_intercept = im_max;
-        let im_slope = (im_min - im_max) / f64::from(scan_max);
-
+    /// The range-fallback calibration, built even when the calibration
+    /// tables are usable. For comparing the two models; readers should use
+    /// [`Reader::bundle_calibration`].
+    pub fn range_fallback_calibration(&self) -> Result<Calibration> {
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let (im_intercept, im_slope) = mobility_calibration(&conn)?;
+        let (intercept, slope) = range_mz_calibration(&conn)?;
         Ok(Calibration {
-            mz_intercept,
-            mz_slope,
+            mz: MzConversion::RangeFallback { intercept, slope },
             im_intercept,
             im_slope,
         })
@@ -641,4 +675,190 @@ impl Reader {
         )
         .map_err(|e| Error::CorruptFrame(frame.id, e))
     }
+}
+
+/// `GlobalMetadata.Value` for `key`, `None` when the key is absent.
+fn global_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
+            [key],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?)
+}
+
+/// Like [`global_meta`] but a missing key is an error.
+fn required_global_meta(conn: &Connection, key: &str) -> Result<String> {
+    Ok(conn.query_row(
+        "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
+        [key],
+        |row| row.get::<_, String>(0),
+    )?)
+}
+
+/// `(im_intercept, im_slope)` of the linear scan -> 1/K0 model.
+fn mobility_calibration(conn: &Connection) -> Result<(f64, f64)> {
+    let im_min: f64 = required_global_meta(conn, "OneOverK0AcqRangeLower")?
+        .trim()
+        .parse()
+        .unwrap_or(0.0);
+    let im_max: f64 = required_global_meta(conn, "OneOverK0AcqRangeUpper")?
+        .trim()
+        .parse()
+        .unwrap_or(0.0);
+    let scan_max: u32 = conn
+        .query_row("SELECT MAX(NumScans) FROM Frames", [], |row| row.get(0))
+        .unwrap_or(0);
+    if im_min <= 0.0 || im_max <= im_min || scan_max == 0 {
+        return Err(Error::CorruptFrame(
+            0,
+            format!(
+                "invalid mobility calibration metadata: min={im_min} max={im_max} scan_max={scan_max}"
+            ),
+        ));
+    }
+    Ok((im_max, (im_min - im_max) / f64::from(scan_max)))
+}
+
+/// `(intercept, slope)` of the range-fallback model
+/// `sqrt(mz) = intercept + slope * tof`.
+fn range_mz_calibration(conn: &Connection) -> Result<(f64, f64)> {
+    let mut mz_min: f64 = required_global_meta(conn, "MzAcqRangeLower")?
+        .trim()
+        .parse()
+        .unwrap_or(0.0);
+    let mut mz_max: f64 = required_global_meta(conn, "MzAcqRangeUpper")?
+        .trim()
+        .parse()
+        .unwrap_or(0.0);
+    let tof_max: u32 = required_global_meta(conn, "DigitizerNumSamples")?
+        .trim()
+        .parse()
+        .unwrap_or(0);
+    let acq_sw = global_meta(conn, "AcquisitionSoftware")?.unwrap_or_default();
+    if acq_sw.trim() == "Bruker otofControl" {
+        mz_min -= 5.0;
+        mz_max += 5.0;
+    }
+    if mz_min <= 0.0 || mz_max <= mz_min || tof_max == 0 {
+        return Err(Error::CorruptFrame(
+            0,
+            format!(
+                "invalid m/z calibration metadata: min={mz_min} max={mz_max} tof_max={tof_max}"
+            ),
+        ));
+    }
+    let intercept = mz_min.sqrt();
+    let slope = (mz_max.sqrt() - mz_min.sqrt()) / f64::from(tof_max);
+    Ok((intercept, slope))
+}
+
+/// [`TablesMzModel`] for every `MzCalibration` row referenced by `Frames`,
+/// plus the id of the row referenced by the most frames (lowest id on a
+/// tie). `Err` carries the reason the tables cannot be used.
+fn tables_mz_models(
+    conn: &Connection,
+    tof_max: Option<u32>,
+) -> std::result::Result<(u32, BTreeMap<u32, TablesMzModel>), String> {
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='MzCalibration'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("cannot query the schema: {e}"))?;
+    if exists == 0 {
+        return Err("the MzCalibration table is absent".into());
+    }
+    let ids: Vec<i64> = conn
+        .prepare(
+            "SELECT MzCalibration FROM Frames GROUP BY MzCalibration
+             ORDER BY COUNT(*) DESC, MzCalibration ASC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get(0))?
+                .collect::<rusqlite::Result<Vec<i64>>>()
+        })
+        .map_err(|e| format!("cannot read Frames.MzCalibration: {e}"))?;
+    let Some(&first) = ids.first() else {
+        return Err("no frame references an MzCalibration row".into());
+    };
+    let to_id = |id: i64| {
+        u32::try_from(id).map_err(|_| format!("Frames.MzCalibration value {id} is out of range"))
+    };
+    let primary = to_id(first)?;
+    let mut rows = BTreeMap::new();
+    for id in ids {
+        let id = to_id(id)?;
+        let model = mz_calibration_row(conn, id, tof_max)
+            .map_err(|e| format!("MzCalibration row {id}: {e}"))?;
+        rows.insert(id, model);
+    }
+    Ok((primary, rows))
+}
+
+/// Read and validate one `MzCalibration` row.
+fn mz_calibration_row(
+    conn: &Connection,
+    id: u32,
+    tof_max: Option<u32>,
+) -> std::result::Result<TablesMzModel, String> {
+    const COLUMNS: [&str; 8] = [
+        "ModelType",
+        "DigitizerTimebase",
+        "DigitizerDelay",
+        "C0",
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+    ];
+    let values: Option<Vec<Value>> = conn
+        .query_row(
+            "SELECT ModelType, DigitizerTimebase, DigitizerDelay, C0, C1, C2, C3, C4
+             FROM MzCalibration WHERE Id = ?1",
+            [id],
+            |row| (0..COLUMNS.len()).map(|i| row.get::<_, Value>(i)).collect(),
+        )
+        .optional()
+        .map_err(|e| format!("cannot be read: {e}"))?;
+    let Some(values) = values else {
+        return Err("is referenced by Frames but missing from the table".into());
+    };
+    let mut v = [0.0f64; COLUMNS.len()];
+    for (i, value) in values.iter().enumerate() {
+        v[i] = match value {
+            Value::Integer(n) => *n as f64,
+            Value::Real(x) => *x,
+            other => {
+                return Err(format!(
+                    "{} is not numeric ({:?})",
+                    COLUMNS[i],
+                    other.data_type()
+                ))
+            }
+        };
+    }
+    let [model_type, digitizer_timebase, digitizer_delay, c0, c1, c2, c3, c4] = v;
+    if model_type != 1.0 {
+        return Err(format!(
+            "ModelType {model_type} is not supported (only ModelType 1 is)"
+        ));
+    }
+    if c3 != 0.0 {
+        return Err(format!(
+            "C3 = {c3} is non-zero and the C3 term has not been identified"
+        ));
+    }
+    let model = TablesMzModel {
+        digitizer_timebase,
+        digitizer_delay,
+        c0,
+        c1,
+        c2,
+        c4,
+    };
+    model.validate(tof_max)?;
+    Ok(model)
 }

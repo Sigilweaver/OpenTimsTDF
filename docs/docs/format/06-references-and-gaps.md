@@ -30,15 +30,11 @@ separate crate (e.g. `opentsf`) would be the appropriate scope.
 
 ### Proprietary polynomial models
 
-**`MzCalibration` polynomial (ModelType=1).** A proprietary non-linear
-TOF -> m/z mapping uses coefficients `C1 - C4` stored in
-`CalibrationInfo`. These coefficients are visible in the open
-database but the functional form is not publicly documented. The
-open-source linear approximation achieves < 2 ppm for typical
-acquisitions when fitted from `CalibrationInfo` (see
-[04-calibration.md](04-calibration.md#tof---mz-regressed-variant)).
-OpenTimsTDF does not implement that fit; it uses the boundary
-variant, which can be off by up to ~15000 ppm.
+**`MzCalibration` (ModelType=1).** Implemented from the bundle's own
+reference data; see [04-calibration.md](04-calibration.md). Open
+items: the meaning of `C3` (zero in every observed `ModelType = 1` row),
+the temperature terms (`T1`, `T2`, `dC1`, `dC2`, not applied), and
+`ModelType = 2` (older `impacTEM` bundles, which use the range fallback).
 
 **`TimsCalibration` voltage polynomial (ModelType=2).** A proprietary
 model uses 10 coefficients stored in `CalibrationInfo` blobs
