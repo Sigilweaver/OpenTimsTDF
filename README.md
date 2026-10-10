@@ -90,14 +90,12 @@ full quickstart, guide, and format specification.
   Do not rely on these m/z values for accurate-mass work: recalibrate
   against known masses (most search engines have a mass recalibration step)
   or use wide m/z tolerances.
-- **Codec 1 provenance is under review.** The codec 1 frame decoder is
-  ported from AlphaTims (see `THIRD-PARTY-NOTICES`). AlphaTims does not
-  document how its codec 1 decoder was derived, and we are confirming
-  that with its maintainers. Codec 2 is not affected.
 
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
 
-The TDF format and codecs were worked out from public sample data
-(PRIDE accessions). See [ATTRIBUTION.md](ATTRIBUTION.md).
+The TDF format was worked out from public sample data (PRIDE accessions).
+See [ATTRIBUTION.md](ATTRIBUTION.md). Codec 1 decoding is ported from
+AlphaTims and the codec 2 decode loop follows OpenTIMS; see
+[THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
