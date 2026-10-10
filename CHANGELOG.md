@@ -35,6 +35,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   selected ion is left empty because a DIA window has no single precursor.
 - Integration tests resolved bundle paths relative to the crate directory,
   so every bundle test always skipped. Paths now resolve from the repo root.
+- Publish workflow: a failed `cargo publish` now fails the job instead of
+  being ignored.
 
 ## [2.0.0] - 2026-09-28
 
