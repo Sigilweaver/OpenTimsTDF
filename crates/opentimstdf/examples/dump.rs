@@ -12,7 +12,14 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
     let bundle = &args[1];
-    let frame_id: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let frame_id: u32 = match args.get(2).map(|s| s.parse()) {
+        None => 1,
+        Some(Ok(id)) => id,
+        Some(Err(e)) => {
+            eprintln!("frame_id {:?}: {e}", args[2]);
+            return ExitCode::from(2);
+        }
+    };
 
     let reader = match opentimstdf::Reader::open(bundle) {
         Ok(r) => r,
@@ -125,11 +132,13 @@ fn main() -> ExitCode {
                         r.collision_energy,
                         r.precursor_id,
                     );
-                    if let Ok(Some(prec)) = reader.precursor(r.precursor_id) {
-                        println!(
+                    match reader.precursor(r.precursor_id) {
+                        Ok(Some(prec)) => println!(
                             "    precursor: mz={:.4}  charge={:?}  intensity={:.0}  parent_frame={}",
                             prec.largest_peak_mz, prec.charge, prec.intensity, prec.parent_frame_id,
-                        );
+                        ),
+                        Ok(None) => eprintln!("    precursor {}: not found", r.precursor_id),
+                        Err(e) => eprintln!("    precursor {}: {e}", r.precursor_id),
                     }
                 }
             }
