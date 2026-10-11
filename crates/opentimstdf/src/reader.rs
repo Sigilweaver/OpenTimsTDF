@@ -482,6 +482,14 @@ impl Reader {
     /// Dispatches on `GlobalMetadata.TimsCompressionType`:
     /// * `2` → SPEC §4.4 (byte-transposed, delta-TOF over zstd).
     /// * `1` → SPEC §4.5 (per-scan LZF with signed-int32 delta stream).
+    ///
+    /// # Errors
+    ///
+    /// `Error::CorruptFrame` when the frame block lies past the end of
+    /// `analysis.tdf_bin` (a truncated or empty file), when the block has
+    /// no payload but `Frames.NumPeaks` is not 0, or when the block does not
+    /// decode to `Frames.NumScans` scans and `Frames.NumPeaks` peaks.
+    /// `Error::UnsupportedCodec` for an unknown compression type.
     pub fn decode_peaks(&self, frame: &Frame) -> Result<Vec<Peak>> {
         match self.compression_type {
             2 => self.decode_peaks_codec2(frame),
@@ -490,11 +498,45 @@ impl Reader {
         }
     }
 
+    /// The 8-byte frame block header at `Frames.TimsId`. A header that
+    /// lies past the end of `analysis.tdf_bin` (a truncated or empty file)
+    /// is `Error::CorruptFrame` naming the frame, not a bare I/O error.
+    fn read_frame_header(&self, frame: &Frame) -> Result<[u8; 8]> {
+        let file_len = self.tdf_bin_len;
+        if checked_block_len(file_len, frame.tims_id, 8).is_none() {
+            return Err(Error::CorruptFrame(
+                frame.id,
+                format!(
+                    "frame block at offset {} is past the end of analysis.tdf_bin \
+                     (file_len {file_len}); the file is truncated or empty",
+                    frame.tims_id
+                ),
+            ));
+        }
+        let mut header = [0u8; 8];
+        read_at_exact(&self.tdf_bin, frame.tims_id, &mut header)?;
+        Ok(header)
+    }
+
+    /// A frame block with no payload. Valid only when `Frames.NumPeaks`
+    /// is 0; otherwise the peaks the frame table lists are missing.
+    fn empty_block(&self, frame: &Frame, block_size: u32) -> Result<Vec<Peak>> {
+        if frame.num_peaks == 0 {
+            return Ok(Vec::new());
+        }
+        Err(Error::CorruptFrame(
+            frame.id,
+            format!(
+                "block size {block_size} has no payload but Frames.NumPeaks is {}",
+                frame.num_peaks
+            ),
+        ))
+    }
+
     fn decode_peaks_codec2(&self, frame: &Frame) -> Result<Vec<Peak>> {
         let f = &self.tdf_bin;
 
-        let mut header = [0u8; 8];
-        read_at_exact(f, frame.tims_id, &mut header)?;
+        let header = self.read_frame_header(frame)?;
         let block_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -507,7 +549,7 @@ impl Reader {
             ));
         }
         if block_size <= 8 {
-            return Ok(Vec::new());
+            return self.empty_block(frame, block_size);
         }
 
         let payload_offset = frame.tims_id + 8;
@@ -550,8 +592,7 @@ impl Reader {
     fn decode_peaks_codec1(&self, frame: &Frame) -> Result<Vec<Peak>> {
         let f = &self.tdf_bin;
 
-        let mut header = [0u8; 8];
-        read_at_exact(f, frame.tims_id, &mut header)?;
+        let header = self.read_frame_header(frame)?;
         let bin_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -563,7 +604,10 @@ impl Reader {
                 ),
             ));
         }
-        if bin_size <= 8 || frame.num_peaks == 0 {
+        if bin_size <= 8 {
+            return self.empty_block(frame, bin_size);
+        }
+        if frame.num_peaks == 0 {
             return Ok(Vec::new());
         }
 
@@ -628,13 +672,24 @@ impl Reader {
         let mut compressed = vec![0u8; compressed_len];
         read_at_exact(f, compressed_offset, &mut compressed)?;
 
-        decode_codec1(
+        let peaks = decode_codec1(
             &compressed,
             &scan_offsets,
             frame.num_peaks,
             self.max_num_peaks_per_scan.max(1) as usize,
         )
-        .map_err(|e| Error::CorruptFrame(frame.id, e))
+        .map_err(|e| Error::CorruptFrame(frame.id, e))?;
+        if peaks.len() != frame.num_peaks as usize {
+            return Err(Error::CorruptFrame(
+                frame.id,
+                format!(
+                    "decoded {} peaks but Frames.NumPeaks is {}",
+                    peaks.len(),
+                    frame.num_peaks
+                ),
+            ));
+        }
+        Ok(peaks)
     }
 }
 

@@ -69,6 +69,13 @@ there is no `From<rusqlite::Error>` impl. Calibration metadata problems are
 
 `decode_codec2` returns `Result<Vec<Peak>, String>`, like `decode_codec1`.
 
+`Reader::decode_peaks` reports a frame block past the end of
+`analysis.tdf_bin` (a truncated or empty file) as `Error::CorruptFrame`
+instead of `Error::Io`, and a frame whose block cannot supply the
+`Frames.NumPeaks` peaks as `Error::CorruptFrame` instead of returning
+fewer peaks. Code matching `Error::Io` for truncated files should match
+`Error::CorruptFrame`.
+
 ## Python
 
 No renamed or removed names. Behavior changes:

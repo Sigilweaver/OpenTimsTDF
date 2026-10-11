@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 
 import opentimstdf
@@ -49,3 +50,43 @@ def test_canonical_records():
 
     for chrom in reader.read_chromatograms():
         assert len(chrom["time_sec"]) == len(chrom["intensity"])
+
+
+def _empty_bin_bundle(root: Path) -> Path:
+    """Synthetic bundle: two MS1 frames that list peaks and a zero-byte
+    analysis.tdf_bin, as in an incomplete upload."""
+    bundle = root / "empty-bin.d"
+    bundle.mkdir()
+    (bundle / "analysis.tdf_bin").write_bytes(b"")
+    con = sqlite3.connect(bundle / "analysis.tdf")
+    con.executescript(
+        """
+        CREATE TABLE GlobalMetadata (Key TEXT PRIMARY KEY, Value TEXT);
+        INSERT INTO GlobalMetadata VALUES
+          ('TimsCompressionType', '2'),
+          ('OneOverK0AcqRangeLower', '0.6'),
+          ('OneOverK0AcqRangeUpper', '1.6'),
+          ('MzAcqRangeLower', '100'),
+          ('MzAcqRangeUpper', '1700'),
+          ('DigitizerNumSamples', '400000'),
+          ('InstrumentName', 'timsTOF Pro');
+        CREATE TABLE Frames (Id INTEGER PRIMARY KEY, Time REAL, NumScans INTEGER,
+          NumPeaks INTEGER, TimsId INTEGER, Polarity TEXT, ScanMode INTEGER,
+          MsMsType INTEGER, MzCalibration INTEGER, AccumulationTime REAL,
+          SummedIntensities INTEGER, MaxIntensity INTEGER);
+        INSERT INTO Frames VALUES (1, 0.1, 2, 2, 0, '+', 8, 0, 1, 100.0, 120, 70);
+        INSERT INTO Frames VALUES (2, 0.2, 2, 2, 100, '+', 8, 0, 1, 100.0, 120, 70);
+        """
+    )
+    con.commit()
+    con.close()
+    return bundle
+
+
+def test_empty_tdf_bin_raises(tmp_path):
+    reader = opentimstdf.Reader(str(_empty_bin_bundle(tmp_path)))
+    frame = reader.frames()[0]
+    with pytest.raises(RuntimeError, match="past the end of analysis.tdf_bin"):
+        reader.decode_peaks(frame)
+    with pytest.raises(RuntimeError, match="corrupt frame 1"):
+        next(reader.iter_records())
