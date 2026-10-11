@@ -70,6 +70,15 @@ models and error variants are added in minor releases. See
   frame that cannot be decoded and ends the stream, and
   `Reader.read_chromatograms()` raises when the chromatograms cannot be
   built.
+- `Reader::decode_peaks` returns `Error::CorruptFrame` (was `Error::Io`
+  "failed to fill whole buffer") when a frame's block lies past the end of
+  `analysis.tdf_bin`, for example when the file is empty. It also returns
+  `Error::CorruptFrame` when a block has no payload but `Frames.NumPeaks`
+  is not 0 (was an empty peak list), and when a codec-1 frame decodes to a
+  different number of peaks than `Frames.NumPeaks` (was returned as is).
+  A bundle with an empty `analysis.tdf_bin`, such as the PXD030992 upload,
+  now fails `write_mzml` on its first frame with a message naming the
+  file.
 
 ### Added
 
@@ -144,6 +153,21 @@ models and error variants are added in minor releases. See
 - mzML: diaPASEF spectra no longer report the isolation window center as the
   selected ion m/z. The isolation window target and width are kept; the
   selected ion is left empty because a DIA window has no single precursor.
+- `to_mzml` example: removes the partial output file when conversion
+  fails, prints the error message instead of its debug form, and reports
+  the number of spectra and chromatograms written.
+- `dump` example: an invalid frame ID argument is an error instead of
+  falling back to frame 1, and a failed precursor lookup is printed instead
+  of ignored.
+- `dia_windows_for_ms2_frame` test named a PXD025576 bundle that is not in
+  the corpus; it now uses `191118_DIAMAX_G10_Slot1-62_1_459.d`.
+- Docs: the README MSRV badge said 1.85 (the MSRV is 1.95), and the docs
+  site changelog page listed 0.1.1 as the current release. The README
+  "Known issues and gaps" section now gives the reference-ion m/z accuracy
+  of the tables model (about 1.9 ppm median, 10.4 ppm 95th percentile over
+  9 bundles) and the measured range-fallback error (14 to 31 ppm on
+  PXD035173) in place of "can be off by hundreds of ppm"; the fallback
+  warning text is changed to match.
 - Integration tests resolved bundle paths relative to the crate directory,
   so every bundle test always skipped. Paths now resolve from the repo root.
 - Publish workflow: a failed `cargo publish` now fails the job instead of
