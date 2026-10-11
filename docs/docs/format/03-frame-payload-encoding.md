@@ -27,7 +27,7 @@ codec-2 bundle in the corpus.
 
 ## Codec 1 frame header
 
-Reproduced from `alphatims.bruker.process_frame` (MIT):
+Reproduced from `alphatims.bruker.process_frame` (Apache-2.0):
 
 ```
 u32 bin_size                       -- total frame size including header
@@ -135,7 +135,7 @@ for v in i32_stream:
 
 The emitted `tof - 1` matches the 0-based TOF convention used by
 codec 2. Ported verbatim from
-`alphatims.bruker.parse_decompressed_bruker_binary_type1` (MIT).
+`alphatims.bruker.parse_decompressed_bruker_binary_type1` (Apache-2.0).
 
 **Verified** on PXD022216 frames 1, 2, 5, 100, 500: the number of
 decoded peaks matches `Frames.NumPeaks` exactly in every case (see

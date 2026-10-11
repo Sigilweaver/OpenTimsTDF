@@ -95,5 +95,8 @@ full quickstart, guide, and format specification.
 
 Apache-2.0. See [LICENSE](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/LICENSE).
 
-The TDF format and codecs were worked out from public sample data
-(PRIDE accessions). See [ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/ATTRIBUTION.md).
+The TDF format was worked out from public sample data (PRIDE accessions).
+See [ATTRIBUTION.md](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/ATTRIBUTION.md).
+Codec 1 decoding is ported from AlphaTims and the codec 2 decode loop
+follows OpenTIMS; see
+[THIRD-PARTY-NOTICES](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/THIRD-PARTY-NOTICES).

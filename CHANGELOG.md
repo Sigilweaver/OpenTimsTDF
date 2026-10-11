@@ -8,6 +8,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- `THIRD-PARTY-NOTICES`: copyright notices and license terms for code
+  ported from AlphaTims (Apache-2.0) and OpenTIMS (MIT), with the list of
+  ported items. Shipped in the crate, the Python sdist and the wheel
+  (`.dist-info/licenses/`). Ported functions name their source file and
+  license in a comment.
 - `Reader::instrument_serial_number()`. mzML run metadata now carries the
   instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
   bundle records one.
@@ -30,6 +35,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Format docs gave the wrong upstream licenses: AlphaTims is Apache-2.0
+  (was listed as MIT) and OpenTIMS is MIT (was listed as BSD-2-Clause).
 - Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
   frame header, instead of decoding the wrong bytes.
 - Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.
