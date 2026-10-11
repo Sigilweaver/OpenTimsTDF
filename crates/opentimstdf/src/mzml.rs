@@ -14,8 +14,9 @@
 //! per-frame `Frames.SummedIntensities` / `Frames.MaxIntensity` columns (one
 //! point per frame), plus one SRM/PRM trace per scheduled `PrmTarget` built by
 //! decoding and summing prm-PASEF (`msms_type == 10`) frames restricted to
-//! that target's scan-number range. See [`chromatogram_records_for`] and
-//! [`srm_chromatograms_for`].
+//! that target's scan-number range. If building the list fails (a prm-PASEF
+//! frame that cannot be decoded, or a failed `PrmFrameMsMsInfo` /
+//! `PrmTargets` lookup), the iterator yields a single `Err`.
 //!
 //! Frame -> spectrum projection:
 //!
@@ -33,19 +34,20 @@
 //! (PASEF frames produce many spectra per frame, so frame ID alone is not
 //! unique).
 //!
-//! Frames with `msms_type` other than 0/8/9 (e.g. PRM-PASEF = 10) are
-//! skipped. `iter_spectra` decodes one frame at a time as the
-//! iterator is driven; a frame that fails to decode is skipped rather than
-//! aborting the whole run, per [`msc::SpectrumSource::iter_spectra`]'s
-//! "skip silently" contract - the canonical writer trusts whatever the
-//! iterator yields.
+//! Frames with `msms_type` other than 0/8/9 (e.g. PRM-PASEF = 10) produce
+//! no spectra. `iter_spectra` decodes one frame at a time as the iterator
+//! is driven. A frame that fails to decode (its peaks, its PASEF or
+//! diaPASEF rows, or a precursor lookup) yields one `Err` item, and
+//! iteration continues with the next frame. The mzML writer stops at the
+//! first `Err` unless the caller opts in to skipping
+//! ([`msc::RecordErrorPolicy::Skip`]).
 
 use std::io::Write;
 use std::path::Path;
 
 use openmassspec_core as msc;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::{
     BundleCalibration, Calibration, DiaWindow, Frame, Metadata, MzCalibrationStatus, PasefMsMsInfo,
     Peak, Precursor as TdfPrecursor, PrmTarget, Reader,
@@ -83,7 +85,7 @@ fn instrument_cv(meta: &Metadata) -> msc::CvTerm {
     ];
     for (prefix, acc, term_name) in known {
         if name.starts_with(prefix) {
-            return msc::CvTerm::new(acc, *term_name);
+            return msc::CvTerm::new(*acc, *term_name);
         }
     }
     msc::CvTerm::new("MS:1000122", "Bruker Daltonics instrument model")
@@ -225,48 +227,67 @@ fn materialize_peaks(
     })
 }
 
+/// Fields shared by every spectrum this reader emits.
+fn base_record(
+    scan_number: u32,
+    native_id: String,
+    ms_level: u32,
+    frame: &Frame,
+    pa: PeakArrays,
+) -> msc::SpectrumRecord {
+    msc::SpectrumRecord::new(
+        (scan_number as usize).saturating_sub(1),
+        scan_number,
+        native_id,
+    )
+    .with_ms_level(ms_level)
+    .with_polarity(polarity_for(frame))
+    .with_scan_mode(msc::ScanMode::Centroid)
+    .with_analyzer(msc::Analyzer::TOFMS)
+    .with_retention_time_sec(frame.time)
+    .with_total_ion_current(pa.tic)
+    .with_base_peak_mz(pa.base_peak_mz)
+    .with_base_peak_intensity(pa.base_peak_intensity)
+    .with_low_mz(pa.low_mz)
+    .with_high_mz(pa.high_mz)
+    .with_ion_injection_time_ms(frame.accumulation_time)
+    .with_inv_mobility(pa.inv_mobility)
+    // Bruker timsTOF has no FAIMS interface, so `faims_cv` stays `None`.
+    .with_peaks(pa.mz, pa.intensity)
+    .with_inv_mobility_per_peak(pa.inv_mobility_per_peak)
+}
+
+impl PeakArrays {
+    /// Arrays for a spectrum with no peaks in range.
+    fn empty() -> Self {
+        PeakArrays {
+            mz: Vec::new(),
+            intensity: Vec::new(),
+            inv_mobility_per_peak: None,
+            tic: 0.0,
+            base_peak_mz: 0.0,
+            base_peak_intensity: 0.0,
+            low_mz: 0.0,
+            high_mz: 0.0,
+            inv_mobility: None,
+        }
+    }
+}
+
 fn build_ms1(
     scan_number: u32,
     frame: &Frame,
     peaks: &[Peak],
     cal: &Calibration,
 ) -> msc::SpectrumRecord {
-    let pa = materialize_peaks(peaks, cal, None, None).unwrap_or(PeakArrays {
-        mz: Vec::new(),
-        intensity: Vec::new(),
-        inv_mobility_per_peak: None,
-        tic: 0.0,
-        base_peak_mz: 0.0,
-        base_peak_intensity: 0.0,
-        low_mz: 0.0,
-        high_mz: 0.0,
-        inv_mobility: None,
-    });
-    msc::SpectrumRecord {
-        extra: ::std::collections::BTreeMap::new(),
-        acquisition_event_id: None,
-        index: (scan_number as usize).saturating_sub(1),
+    let pa = materialize_peaks(peaks, cal, None, None).unwrap_or_else(PeakArrays::empty);
+    base_record(
         scan_number,
-        native_id: format!("frame={} scan=1", frame.id),
-        ms_level: 1,
-        polarity: polarity_for(frame),
-        scan_mode: Some(msc::ScanMode::Centroid),
-        analyzer: Some(msc::Analyzer::TOFMS),
-        filter: None,
-        retention_time_sec: frame.time,
-        total_ion_current: Some(pa.tic),
-        base_peak_mz: Some(pa.base_peak_mz),
-        base_peak_intensity: Some(pa.base_peak_intensity),
-        low_mz: Some(pa.low_mz),
-        high_mz: Some(pa.high_mz),
-        ion_injection_time_ms: frame.accumulation_time,
-        inv_mobility: pa.inv_mobility,
-        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
-        precursor: None,
-        mz: pa.mz,
-        intensity: pa.intensity,
-        inv_mobility_per_peak: pa.inv_mobility_per_peak,
-    }
+        format!("frame={} scan=1", frame.id),
+        1,
+        frame,
+        pa,
+    )
 }
 
 fn build_pasef_ms2(
@@ -283,66 +304,37 @@ fn build_pasef_ms2(
         Some(info.scan_num_begin),
         Some(info.scan_num_end),
     )
-    .unwrap_or(PeakArrays {
-        mz: Vec::new(),
-        intensity: Vec::new(),
-        inv_mobility_per_peak: None,
-        tic: 0.0,
-        base_peak_mz: 0.0,
-        base_peak_intensity: 0.0,
-        low_mz: 0.0,
-        high_mz: 0.0,
-        inv_mobility: None,
-    });
+    .unwrap_or_else(PeakArrays::empty);
     let prec_mz = tdf_prec
         .and_then(|p| p.monoisotopic_mz)
         .or_else(|| tdf_prec.map(|p| p.largest_peak_mz));
-    let precursor = Some(msc::PrecursorInfo {
-        target_mz: Some(info.isolation_mz),
-        selected_mz: prec_mz,
-        isolation_width: Some(info.isolation_width),
-        charge: tdf_prec.and_then(|p| p.charge).map(|c| c as i32),
-        intensity: tdf_prec.map(|p| p.intensity),
-        collision_energy: Some(info.collision_energy),
-        ce_is_nce: false,
+    let precursor = msc::PrecursorInfo::default()
+        .with_target_mz(info.isolation_mz)
+        .with_selected_mz(prec_mz)
+        .with_isolation_width(info.isolation_width)
+        .with_charge(tdf_prec.and_then(|p| p.charge).map(|c| c as i32))
+        .with_intensity(tdf_prec.map(|p| p.intensity))
+        .with_collision_energy(info.collision_energy)
+        .with_ce_is_nce(false)
         // Same native-ID format used for the MS1 spectrum (`build_ms1`,
         // above), so mzML `spectrumRef` lookups round-trip: the MS1 frame
         // this precursor was selected from is `parent_frame_id`, and every
         // MS1 spectrum has exactly one scan (`scan=1`).
-        precursor_native_id: tdf_prec.map(|p| format!("frame={} scan=1", p.parent_frame_id)),
-        activation: Some(msc::Activation::HCD),
-        analyzer: Some(msc::Analyzer::TOFMS),
-        // CCS derivation from inv_mobility is tracked separately, #14.
-        ccs: None,
-    });
-    msc::SpectrumRecord {
-        extra: ::std::collections::BTreeMap::new(),
-        acquisition_event_id: None,
-        index: (scan_number as usize).saturating_sub(1),
+        .with_precursor_native_id(tdf_prec.map(|p| format!("frame={} scan=1", p.parent_frame_id)))
+        .with_activation(msc::Activation::HCD)
+        .with_analyzer(msc::Analyzer::TOFMS);
+    // CCS derivation from inv_mobility is tracked separately, #14.
+    base_record(
         scan_number,
-        native_id: format!(
+        format!(
             "frame={} scan={}-{}",
             frame.id, info.scan_num_begin, info.scan_num_end
         ),
-        ms_level: 2,
-        polarity: polarity_for(frame),
-        scan_mode: Some(msc::ScanMode::Centroid),
-        analyzer: Some(msc::Analyzer::TOFMS),
-        filter: None,
-        retention_time_sec: frame.time,
-        total_ion_current: Some(pa.tic),
-        base_peak_mz: Some(pa.base_peak_mz),
-        base_peak_intensity: Some(pa.base_peak_intensity),
-        low_mz: Some(pa.low_mz),
-        high_mz: Some(pa.high_mz),
-        ion_injection_time_ms: frame.accumulation_time,
-        inv_mobility: pa.inv_mobility,
-        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
-        precursor,
-        mz: pa.mz,
-        intensity: pa.intensity,
-        inv_mobility_per_peak: pa.inv_mobility_per_peak,
-    }
+        2,
+        frame,
+        pa,
+    )
+    .with_precursor(precursor)
 }
 
 fn build_dia_ms2(
@@ -358,63 +350,30 @@ fn build_dia_ms2(
         Some(window.scan_num_begin),
         Some(window.scan_num_end),
     )
-    .unwrap_or(PeakArrays {
-        mz: Vec::new(),
-        intensity: Vec::new(),
-        inv_mobility_per_peak: None,
-        tic: 0.0,
-        base_peak_mz: 0.0,
-        base_peak_intensity: 0.0,
-        low_mz: 0.0,
-        high_mz: 0.0,
-        inv_mobility: None,
-    });
+    .unwrap_or_else(PeakArrays::empty);
     // diaPASEF windows co-isolate many precursors, so there is no single
     // selected ion. Report the isolation window (target + width) only and
     // leave `selected_mz` empty rather than inventing one at the window
     // center.
-    let precursor = Some(msc::PrecursorInfo {
-        target_mz: Some(window.isolation_mz),
-        selected_mz: None,
-        isolation_width: Some(window.isolation_width),
-        charge: None,
-        intensity: None,
-        collision_energy: Some(window.collision_energy),
-        ce_is_nce: false,
-        precursor_native_id: None,
-        activation: Some(msc::Activation::HCD),
-        analyzer: Some(msc::Analyzer::TOFMS),
-        // CCS derivation from inv_mobility is tracked separately, #14.
-        ccs: None,
-    });
-    msc::SpectrumRecord {
-        extra: ::std::collections::BTreeMap::new(),
-        acquisition_event_id: None,
-        index: (scan_number as usize).saturating_sub(1),
+    let precursor = msc::PrecursorInfo::default()
+        .with_target_mz(window.isolation_mz)
+        .with_isolation_width(window.isolation_width)
+        .with_collision_energy(window.collision_energy)
+        .with_ce_is_nce(false)
+        .with_activation(msc::Activation::HCD)
+        .with_analyzer(msc::Analyzer::TOFMS);
+    // CCS derivation from inv_mobility is tracked separately, #14.
+    base_record(
         scan_number,
-        native_id: format!(
+        format!(
             "frame={} scan={}-{}",
             frame.id, window.scan_num_begin, window.scan_num_end
         ),
-        ms_level: 2,
-        polarity: polarity_for(frame),
-        scan_mode: Some(msc::ScanMode::Centroid),
-        analyzer: Some(msc::Analyzer::TOFMS),
-        filter: None,
-        retention_time_sec: frame.time,
-        total_ion_current: Some(pa.tic),
-        base_peak_mz: Some(pa.base_peak_mz),
-        base_peak_intensity: Some(pa.base_peak_intensity),
-        low_mz: Some(pa.low_mz),
-        high_mz: Some(pa.high_mz),
-        ion_injection_time_ms: frame.accumulation_time,
-        inv_mobility: pa.inv_mobility,
-        faims_cv: None, // Bruker timsTOF has no FAIMS interface.
-        precursor,
-        mz: pa.mz,
-        intensity: pa.intensity,
-        inv_mobility_per_peak: pa.inv_mobility_per_peak,
-    }
+        2,
+        frame,
+        pa,
+    )
+    .with_precursor(precursor)
 }
 
 /// `SpectrumSource` adapter over an open [`Reader`].
@@ -508,36 +467,35 @@ pub struct OwnedTdfSource {
 // information. See `docs/docs/format/01-tdf-sqlite-schema.md`.
 
 /// Project one frame into zero or more spectra, incrementing `scan_counter`
-/// for each spectrum produced. Any decode failure - the frame's peaks, its
-/// PASEF info rows, or its diaPASEF windows - causes that frame to be
-/// skipped (returns an empty `Vec`) rather than aborting the caller's
-/// iteration, matching [`msc::SpectrumSource::iter_spectra`]'s silent-skip
-/// contract. A precursor lookup failure for a single PASEF MS2 is narrower:
-/// it only drops that spectrum's precursor metadata, not the spectrum.
+/// for each spectrum produced. Any failure - decoding the frame's peaks, or
+/// reading its PASEF rows, diaPASEF windows or a precursor - is returned as
+/// `Err`, and `scan_counter` is left unchanged. A frame whose
+/// `msms_type` this reader does not project, or a diaPASEF frame with no
+/// window group, yields no spectra.
 fn spectra_for_frame(
     reader: &Reader,
     frame: &Frame,
     calibration: &Calibration,
     scan_counter: &mut u32,
-) -> Vec<msc::SpectrumRecord> {
-    let Ok(peaks) = reader.decode_peaks(frame) else {
-        return Vec::new();
-    };
+) -> Result<Vec<msc::SpectrumRecord>> {
+    if !matches!(frame.msms_type, 0 | 8 | 9) {
+        return Ok(Vec::new());
+    }
+    let peaks = reader.decode_peaks(frame)?;
+    let mut counter = *scan_counter;
     let mut records = match frame.msms_type {
         0 => {
-            *scan_counter += 1;
-            vec![build_ms1(*scan_counter, frame, &peaks, calibration)]
+            counter += 1;
+            vec![build_ms1(counter, frame, &peaks, calibration)]
         }
         8 => {
-            let Ok(infos) = reader.pasef_msms_info_for_frame(frame.id) else {
-                return Vec::new();
-            };
+            let infos = reader.pasef_msms_info_for_frame(frame.id)?;
             let mut out = Vec::with_capacity(infos.len());
             for info in infos {
-                let prec = reader.precursor(info.precursor_id).ok().flatten();
-                *scan_counter += 1;
+                let prec = reader.precursor(info.precursor_id)?;
+                counter += 1;
                 out.push(build_pasef_ms2(
-                    *scan_counter,
+                    counter,
                     frame,
                     &info,
                     prec.as_ref(),
@@ -547,21 +505,19 @@ fn spectra_for_frame(
             }
             out
         }
-        9 => {
-            let Ok(windows) = reader.dia_windows_for_frame(frame.id) else {
-                return Vec::new();
-            };
+        _ => {
+            let windows = reader.dia_windows_for_frame(frame.id)?;
             let mut out = Vec::new();
             if let Some(group) = windows {
                 for w in &group.windows {
-                    *scan_counter += 1;
-                    out.push(build_dia_ms2(*scan_counter, frame, w, &peaks, calibration));
+                    counter += 1;
+                    out.push(build_dia_ms2(counter, frame, w, &peaks, calibration));
                 }
             }
             out
         }
-        _ => Vec::new(),
     };
+    *scan_counter = counter;
     for record in &mut records {
         record
             .extra
@@ -604,33 +560,33 @@ fn spectra_for_frame(
                 .insert("opentimstdf.max_intensity".into(), value.to_string());
         }
     }
-    records
+    Ok(records)
 }
 
 /// Build a lazy, frame-at-a-time spectrum iterator. Decodes and projects
 /// one frame per call to `next()` that yields nothing from the pending
 /// queue, so at most one frame's peaks (plus its fan-out of PASEF/diaPASEF
-/// spectra) are held in memory at a time.
+/// spectra) are held in memory at a time. A frame that fails yields one
+/// `Err` item; the next call continues with the following frame.
 fn frame_iter<'s>(
     reader: &'s Reader,
     frames: &'s [Frame],
     calibration: &'s BundleCalibration,
-) -> impl Iterator<Item = msc::SpectrumRecord> + 's {
+) -> impl Iterator<Item = msc::Result<msc::SpectrumRecord>> + 's {
     let mut frame_idx = 0usize;
     let mut pending = std::collections::VecDeque::new();
     let mut scan_counter: u32 = 0;
     std::iter::from_fn(move || loop {
         if let Some(rec) = pending.pop_front() {
-            return Some(rec);
+            return Some(Ok(rec));
         }
         let frame = frames.get(frame_idx)?;
         frame_idx += 1;
-        pending.extend(spectra_for_frame(
-            reader,
-            frame,
-            calibration.for_frame(frame),
-            &mut scan_counter,
-        ));
+        let cal = calibration.for_frame(frame);
+        match spectra_for_frame(reader, frame, &cal, &mut scan_counter) {
+            Ok(records) => pending.extend(records),
+            Err(e) => return Some(Err(e.into())),
+        }
     })
 }
 
@@ -670,42 +626,46 @@ fn run_metadata_for(
     if let Some(value) = &meta.acquisition_date_time {
         extra.insert("opentimstdf.acquisition_date_time".into(), value.clone());
     }
-    msc::RunMetadata {
-        extra,
-        source_file_name: bundle_name.to_string(),
-        source_file_format: source_file_format_cv(),
-        native_id_format: native_id_format_cv(),
-        instrument: instrument_cv(meta),
-        instrument_serial_number: instrument_serial_number.map(str::to_string),
-        software_name: SOFTWARE_NAME.into(),
-        software_version: SOFTWARE_VERSION.into(),
-        // `Metadata::acquisition_software`/`acquisition_software_version` are
-        // read straight from the `AcquisitionSoftware`/`AcquisitionSoftwareVersion`
-        // rows in `analysis.tdf`'s GlobalMetadata table (see `Reader::metadata`
-        // in reader.rs), defaulting to an empty string when the key is absent.
-        // Treat empty as "not present" rather than surfacing an empty
-        // `Some("")` in the mzML output.
-        acquisition_software_name: Some(meta.acquisition_software.trim())
+    msc::RunMetadata::new(
+        bundle_name,
+        source_file_format_cv(),
+        native_id_format_cv(),
+        instrument_cv(meta),
+        SOFTWARE_NAME,
+        SOFTWARE_VERSION,
+    )
+    .with_instrument_serial_number(instrument_serial_number.map(str::to_string))
+    // `Metadata::acquisition_software`/`acquisition_software_version` are
+    // read straight from the `AcquisitionSoftware`/`AcquisitionSoftwareVersion`
+    // rows in `analysis.tdf`'s GlobalMetadata table (see `Reader::metadata`
+    // in reader.rs), defaulting to an empty string when the key is absent.
+    // Treat empty as "not present" rather than surfacing an empty
+    // `Some("")` in the mzML output.
+    .with_acquisition_software_name(
+        Some(meta.acquisition_software.trim())
             .filter(|s| !s.is_empty())
             .map(str::to_string),
-        acquisition_software_version: Some(meta.acquisition_software_version.trim())
+    )
+    .with_acquisition_software_version(
+        Some(meta.acquisition_software_version.trim())
             .filter(|s| !s.is_empty())
             .map(str::to_string),
-        // `Metadata::acquisition_date_time` is read straight from the
-        // `AcquisitionDateTime` row in `analysis.tdf`'s GlobalMetadata table
-        // (see `Reader::metadata` in reader.rs) and documented there as an
-        // ISO 8601 string. `RunMetadata::start_timestamp` promises RFC 3339,
-        // which additionally requires a UTC offset; `is_rfc3339` guards
-        // against a bundle whose value omits one rather than passing it
-        // through unchecked.
-        start_timestamp: meta
-            .acquisition_date_time
+    )
+    // `Metadata::acquisition_date_time` is read straight from the
+    // `AcquisitionDateTime` row in `analysis.tdf`'s GlobalMetadata table
+    // (see `Reader::metadata` in reader.rs) and documented there as an
+    // ISO 8601 string. `RunMetadata::start_timestamp` promises RFC 3339,
+    // which additionally requires a UTC offset; `is_rfc3339` guards
+    // against a bundle whose value omits one rather than passing it
+    // through unchecked.
+    .with_start_timestamp(
+        meta.acquisition_date_time
             .as_deref()
             .filter(|s| is_rfc3339(s))
             .map(str::to_string),
-        mobility_array_kind: Some(msc::MobilityArrayKind::InverseReducedVsPerCm2),
-        analyzers: Vec::new(),
-    }
+    )
+    .with_mobility_array_kind(msc::MobilityArrayKind::InverseReducedVsPerCm2)
+    .with_extra_map(extra)
 }
 
 /// Build the whole-run chromatogram traces from the already-decoded per-frame
@@ -752,31 +712,18 @@ fn chromatogram_records_for(frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
 
     let (tic_time, tic_int) = trace(frames, |f| f.summed_intensities);
     if !tic_time.is_empty() {
-        out.push(msc::ChromatogramRecord {
-            index: out.len(),
-            id: "TIC".to_string(),
-            chromatogram_type: Some(msc::CvTerm::new(
-                "MS:1000235",
-                "total ion current chromatogram",
-            )),
-            precursor_mz: None,
-            product_mz: None,
-            time_sec: tic_time,
-            intensity: tic_int,
-        });
+        out.push(
+            msc::ChromatogramRecord::new(out.len(), "TIC", tic_time, tic_int)
+                .with_chromatogram_type(msc::CvTerm::from(msc::cv::TOTAL_ION_CURRENT_CHROMATOGRAM)),
+        );
     }
 
     let (bpc_time, bpc_int) = trace(frames, |f| f.max_intensity);
     if !bpc_time.is_empty() {
-        out.push(msc::ChromatogramRecord {
-            index: out.len(),
-            id: "BPC".to_string(),
-            chromatogram_type: Some(msc::CvTerm::new("MS:1000628", "basepeak chromatogram")),
-            precursor_mz: None,
-            product_mz: None,
-            time_sec: bpc_time,
-            intensity: bpc_int,
-        });
+        out.push(
+            msc::ChromatogramRecord::new(out.len(), "BPC", bpc_time, bpc_int)
+                .with_chromatogram_type(msc::CvTerm::new("MS:1000628", "basepeak chromatogram")),
+        );
     }
 
     out
@@ -818,18 +765,12 @@ fn build_srm_record(
     time_sec: Vec<f32>,
     intensity: Vec<f32>,
 ) -> msc::ChromatogramRecord {
-    msc::ChromatogramRecord {
-        index: 0,
-        id: format!("SRM_{}", target.id),
-        chromatogram_type: Some(msc::CvTerm::new(
+    msc::ChromatogramRecord::new(0, format!("SRM_{}", target.id), time_sec, intensity)
+        .with_chromatogram_type(msc::CvTerm::new(
             "MS:1001473",
             "selected reaction monitoring chromatogram",
-        )),
-        precursor_mz: Some(target.monoisotopic_mz),
-        product_mz: None,
-        time_sec,
-        intensity,
-    }
+        ))
+        .with_precursor_mz(target.monoisotopic_mz)
 }
 
 /// Build one SRM/PRM chromatogram trace per scheduled `PrmTarget`.
@@ -846,9 +787,10 @@ fn build_srm_record(
 ///    ([`sum_intensity_in_range`]) and appends `(frame.time, sum)` to that
 ///    target's running series.
 ///
-/// A frame that fails to decode, or whose `PrmFrameMsMsInfo` lookup fails or
-/// comes back empty, is skipped - matching [`spectra_for_frame`]'s
-/// silent-skip contract for a single bad frame. A target that never appears
+/// A frame that fails to decode, or whose `PrmFrameMsMsInfo` or `PrmTargets`
+/// lookup fails, makes the whole function return `Err`. A frame with no
+/// `PrmFrameMsMsInfo` rows contributes nothing, and a target id that has no
+/// `PrmTargets` row is left out. A target that never appears
 /// in any `PrmFrameMsMsInfo` row (e.g. an unused entry in a shared target
 /// list) is omitted from the output entirely, rather than emitted with an
 /// empty trace - the same no-empty-chromatogram contract
@@ -857,7 +799,10 @@ fn build_srm_record(
 /// Target iteration order is by `PrmTargets.Id` ascending (a `BTreeMap` key),
 /// which is deterministic but otherwise arbitrary; per-target point order is
 /// frame-acquisition order, since `frames` itself is walked in that order.
-fn srm_chromatograms_for(reader: &Reader, frames: &[Frame]) -> Vec<msc::ChromatogramRecord> {
+fn srm_chromatograms_for(
+    reader: &Reader,
+    frames: &[Frame],
+) -> Result<Vec<msc::ChromatogramRecord>> {
     let mut per_target: std::collections::BTreeMap<u32, (Vec<f32>, Vec<f32>)> =
         std::collections::BTreeMap::new();
 
@@ -865,15 +810,11 @@ fn srm_chromatograms_for(reader: &Reader, frames: &[Frame]) -> Vec<msc::Chromato
         if frame.msms_type != 10 {
             continue;
         }
-        let Ok(infos) = reader.prm_msms_info_for_frame(frame.id) else {
-            continue;
-        };
+        let infos = reader.prm_msms_info_for_frame(frame.id)?;
         if infos.is_empty() {
             continue;
         }
-        let Ok(peaks) = reader.decode_peaks(frame) else {
-            continue;
-        };
+        let peaks = reader.decode_peaks(frame)?;
         for info in &infos {
             let sum = sum_intensity_in_range(&peaks, info.scan_num_begin, info.scan_num_end);
             let series = per_target.entry(info.target_id).or_default();
@@ -884,12 +825,12 @@ fn srm_chromatograms_for(reader: &Reader, frames: &[Frame]) -> Vec<msc::Chromato
 
     let mut out = Vec::with_capacity(per_target.len());
     for (target_id, (time_sec, intensity)) in per_target {
-        let Ok(Some(target)) = reader.prm_target(target_id) else {
+        let Some(target) = reader.prm_target(target_id)? else {
             continue;
         };
         out.push(build_srm_record(&target, time_sec, intensity));
     }
-    out
+    Ok(out)
 }
 
 /// Full chromatogram list for [`TdfSource`]/[`OwnedTdfSource`]: TIC and BPC
@@ -902,13 +843,22 @@ fn srm_chromatograms_for(reader: &Reader, frames: &[Frame]) -> Vec<msc::Chromato
 fn chromatogram_records_for_source(
     reader: &Reader,
     frames: &[Frame],
-) -> Vec<msc::ChromatogramRecord> {
+) -> Result<Vec<msc::ChromatogramRecord>> {
     let mut out = chromatogram_records_for(frames);
-    out.extend(srm_chromatograms_for(reader, frames));
+    out.extend(srm_chromatograms_for(reader, frames)?);
     for (i, rec) in out.iter_mut().enumerate() {
         rec.index = i;
     }
-    out
+    Ok(out)
+}
+
+/// The chromatogram list as a [`msc::ChromatogramIter`]: every record, or a
+/// single `Err` when building the list failed.
+fn chromatogram_iter<'s>(reader: &Reader, frames: &[Frame]) -> msc::ChromatogramIter<'s> {
+    match chromatogram_records_for_source(reader, frames) {
+        Ok(records) => Box::new(records.into_iter().map(Ok)),
+        Err(e) => Box::new(std::iter::once(Err(msc::Error::from(e)))),
+    }
 }
 
 impl<'a> msc::SpectrumSource for TdfSource<'a> {
@@ -917,16 +867,14 @@ impl<'a> msc::SpectrumSource for TdfSource<'a> {
             &self.metadata,
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
-            &self.calibration.status,
+            self.calibration.status(),
         )
     }
-    fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
+    fn iter_spectra<'s>(&'s mut self) -> msc::SpectrumIter<'s> {
         Box::new(frame_iter(self.reader, &self.frames, &self.calibration))
     }
-    fn iter_chromatograms<'s>(
-        &'s mut self,
-    ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
-        Box::new(chromatogram_records_for_source(self.reader, &self.frames).into_iter())
+    fn iter_chromatograms<'s>(&'s mut self) -> msc::ChromatogramIter<'s> {
+        chromatogram_iter(self.reader, &self.frames)
     }
 }
 
@@ -936,16 +884,14 @@ impl msc::SpectrumSource for OwnedTdfSource {
             &self.metadata,
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
-            &self.calibration.status,
+            self.calibration.status(),
         )
     }
-    fn iter_spectra<'s>(&'s mut self) -> Box<dyn Iterator<Item = msc::SpectrumRecord> + 's> {
+    fn iter_spectra<'s>(&'s mut self) -> msc::SpectrumIter<'s> {
         Box::new(frame_iter(&self.reader, &self.frames, &self.calibration))
     }
-    fn iter_chromatograms<'s>(
-        &'s mut self,
-    ) -> Box<dyn Iterator<Item = msc::ChromatogramRecord> + 's> {
-        Box::new(chromatogram_records_for_source(&self.reader, &self.frames).into_iter())
+    fn iter_chromatograms<'s>(&'s mut self) -> msc::ChromatogramIter<'s> {
+        chromatogram_iter(&self.reader, &self.frames)
     }
 }
 
@@ -953,18 +899,34 @@ impl msc::SpectrumSource for OwnedTdfSource {
 ///
 /// Convenience wrapper that opens `bundle_dir`, projects every frame into
 /// the appropriate MS1 / PASEF MS2 / diaPASEF MS2 spectra, and emits a
-/// valid mzML 1.1.0 document via the canonical writer in `openmassspec-core`.
-pub fn write_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Result<()> {
+/// valid mzML 1.1.0 document via the canonical writer in `openmassspec-core`
+/// with its default [`msc::WriteOptions`].
+///
+/// # Errors
+///
+/// Fails when the bundle cannot be opened, on the first frame or
+/// chromatogram that cannot be decoded, and on write errors. To skip
+/// undecodable frames instead, build a [`TdfSource`] and call
+/// [`msc::write_mzml_with_options`] with [`msc::RecordErrorPolicy::Skip`].
+pub fn write_mzml<P: AsRef<Path>, W: Write>(
+    bundle_dir: P,
+    out: &mut W,
+) -> Result<msc::WriteSummary> {
     let mut src = TdfSource::open(bundle_dir)?;
-    msc::write_mzml(&mut src, out)?;
-    Ok(())
+    msc::write_mzml(&mut src, out).map_err(Error::from)
 }
 
 /// Indexed-mzML equivalent of [`write_mzml`].
-pub fn write_indexed_mzml<P: AsRef<Path>, W: Write>(bundle_dir: P, out: &mut W) -> Result<()> {
+///
+/// # Errors
+///
+/// As for [`write_mzml`].
+pub fn write_indexed_mzml<P: AsRef<Path>, W: Write>(
+    bundle_dir: P,
+    out: &mut W,
+) -> Result<msc::WriteSummary> {
     let mut src = TdfSource::open(bundle_dir)?;
-    msc::write_indexed_mzml(&mut src, out)?;
-    Ok(())
+    msc::write_indexed_mzml(&mut src, out).map_err(Error::from)
 }
 
 #[cfg(test)]
@@ -972,14 +934,10 @@ mod tests {
     use super::*;
 
     fn sample_calibration() -> Calibration {
-        Calibration {
-            mz: crate::MzConversion::RangeFallback {
-                intercept: 1.0,
-                slope: 0.001,
-            },
-            im_intercept: 0.1,
-            im_slope: 0.002,
-        }
+        Calibration::new(
+            crate::MzConversion::range_fallback(1.0, 0.001),
+            crate::MobilityConversion::acquisition_range(0.1, 0.002),
+        )
     }
 
     fn sample_frame(msms_type: u32) -> Frame {
@@ -1203,10 +1161,7 @@ mod tests {
     }
 
     fn tables_status() -> MzCalibrationStatus {
-        MzCalibrationStatus {
-            model: crate::MzCalibrationModel::Tables,
-            fallback_reason: None,
-        }
+        MzCalibrationStatus::tables()
     }
 
     #[test]
@@ -1223,10 +1178,7 @@ mod tests {
             .extra
             .contains_key("opentimstdf.mz_calibration_fallback_reason"));
 
-        let fallback = MzCalibrationStatus {
-            model: crate::MzCalibrationModel::RangeFallback,
-            fallback_reason: Some("the MzCalibration table is absent".into()),
-        };
+        let fallback = MzCalibrationStatus::range_fallback("the MzCalibration table is absent");
         let rm = run_metadata_for(&meta, "bundle.d", None, &fallback);
         assert_eq!(
             rm.extra

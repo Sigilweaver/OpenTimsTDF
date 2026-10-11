@@ -36,6 +36,35 @@ for frame in reader.frames()? {
 
 The mzML writer and the Python `decode_spectrum` already do this.
 
+## Model types
+
+A `Calibration` holds an `MzConversion` (TOF to m/z) and a
+`MobilityConversion` (scan to 1/K0), available through
+`mz_conversion()` and `mobility_conversion()`:
+
+```rust
+use opentimstdf::{MobilityConversion, MzConversion};
+
+match calib.mz_conversion() {
+    MzConversion::Tables(m) => println!("C0={} C1={}", m.c0, m.c1),
+    MzConversion::RangeFallback { intercept, slope, .. } => {
+        println!("sqrt(mz) = {intercept} + {slope} * tof")
+    }
+    _ => println!("other m/z model"),
+}
+if let MobilityConversion::AcquisitionRange { intercept, slope, .. } =
+    calib.mobility_conversion()
+{
+    println!("1/K0 = {intercept} + {slope} * scan");
+}
+```
+
+These enums, `MzCalibrationModel`, `MzCalibrationStatus` and
+`TablesMzModel` are `#[non_exhaustive]`: new models and coefficients can be
+added in a minor release, so matches need a `_` arm. Build values with
+`Calibration::new`, `TablesMzModel::new`, `MzConversion::range_fallback`
+and `MobilityConversion::acquisition_range`.
+
 ## What is read
 
 - **m/z (tables model, the default)**: `MzCalibration.DigitizerDelay`,

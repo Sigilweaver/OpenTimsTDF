@@ -7,11 +7,11 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::calibration::{
-    BundleCalibration, Calibration, MzCalibrationModel, MzCalibrationStatus, MzConversion,
-    TablesMzModel,
+    BundleCalibration, Calibration, MobilityConversion, MzCalibrationModel, MzCalibrationStatus,
+    MzConversion, TablesMzModel,
 };
 use crate::codec::{checked_block_len, decode_codec1, decode_codec2, frame_from_row};
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, SqlResultExt};
 use crate::types::{
     DiaFrameWindows, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor, PrmMsMsInfo,
     PrmTarget,
@@ -84,27 +84,29 @@ impl Reader {
         let tdf_bin_path = bundle_dir.join("analysis.tdf_bin");
         let tdf_bin = File::open(&tdf_bin_path).map_err(|_| Error::MissingFile(tdf_bin_path))?;
         let tdf_bin_len = tdf_bin.metadata()?.len();
-        let conn = Connection::open_with_flags(&tdf, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-        let raw_ct: String = conn.query_row(
-            "SELECT Value FROM GlobalMetadata WHERE Key = 'TimsCompressionType'",
-            [],
-            |row| row.get(0),
-        )?;
+        let conn =
+            Connection::open_with_flags(&tdf, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).sql()?;
+        let raw_ct: String = conn
+            .query_row(
+                "SELECT Value FROM GlobalMetadata WHERE Key = 'TimsCompressionType'",
+                [],
+                |row| row.get(0),
+            )
+            .sql()?;
         let compression_type: u32 = raw_ct
             .trim()
             .parse()
             .map_err(|_| Error::UnsupportedCodec(raw_ct.clone()))?;
         // Codec-1-only metadata: some codec-2 bundles omit this key entirely,
         // so a missing row must default to 0 rather than fail Reader::open.
-        let max_num_peaks_per_scan: u32 = conn
-            .query_row(
-                "SELECT Value FROM GlobalMetadata WHERE Key='MaxNumPeaksPerScan'",
-                [],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()?
-            .and_then(|s| s.trim().parse().ok())
-            .unwrap_or(0);
+        let max_num_peaks_per_scan: u32 = match global_meta(&conn, "MaxNumPeaksPerScan")? {
+            None => 0,
+            Some(v) => v.trim().parse().map_err(|_| {
+                Error::InvalidMetadata(format!(
+                    "GlobalMetadata.MaxNumPeaksPerScan {v:?} is not an unsigned integer"
+                ))
+            })?,
+        };
         Ok(Reader {
             bundle_dir,
             conn: Mutex::new(conn),
@@ -124,38 +126,34 @@ impl Reader {
     }
 
     /// Key-value metadata from `GlobalMetadata`: schema version, instrument, software, codec.
+    ///
+    /// Absent keys give `0` (schema version), an empty string (names) or
+    /// `None` (acquisition date). A schema version that is present but not
+    /// an unsigned integer is an [`Error::InvalidMetadata`].
     pub fn metadata(&self) -> Result<Metadata> {
-        fn meta(conn: &Connection, key: &str) -> Result<String> {
-            Ok(conn.query_row(
-                "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
-                [key],
-                |row| row.get::<_, String>(0),
-            )?)
-        }
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let schema_major: u32 = meta(&conn, "SchemaVersionMajor")
-            .unwrap_or_default()
-            .trim()
-            .parse()
-            .unwrap_or(0);
-        let schema_minor: u32 = meta(&conn, "SchemaVersionMinor")
-            .unwrap_or_default()
-            .trim()
-            .parse()
-            .unwrap_or(0);
-        let instrument_name = meta(&conn, "InstrumentName").unwrap_or_default();
-        let acquisition_software = meta(&conn, "AcquisitionSoftware").unwrap_or_default();
-        let acquisition_software_version =
-            meta(&conn, "AcquisitionSoftwareVersion").unwrap_or_default();
-        let acquisition_date_time = meta(&conn, "AcquisitionDateTime").ok();
+        let version = |key: &str| -> Result<u32> {
+            match global_meta(&conn, key)? {
+                None => Ok(0),
+                Some(v) => v.trim().parse().map_err(|_| {
+                    Error::InvalidMetadata(format!(
+                        "GlobalMetadata.{key} {v:?} is not an unsigned integer"
+                    ))
+                }),
+            }
+        };
+        let schema_version_major = version("SchemaVersionMajor")?;
+        let schema_version_minor = version("SchemaVersionMinor")?;
+        let text =
+            |key: &str| -> Result<String> { Ok(global_meta(&conn, key)?.unwrap_or_default()) };
         Ok(Metadata {
-            schema_version_major: schema_major,
-            schema_version_minor: schema_minor,
-            instrument_name,
-            acquisition_software,
-            acquisition_software_version,
+            schema_version_major,
+            schema_version_minor,
+            instrument_name: text("InstrumentName")?,
+            acquisition_software: text("AcquisitionSoftware")?,
+            acquisition_software_version: text("AcquisitionSoftwareVersion")?,
             compression_type: self.compression_type,
-            acquisition_date_time,
+            acquisition_date_time: global_meta(&conn, "AcquisitionDateTime")?,
         })
     }
 
@@ -169,7 +167,8 @@ impl Reader {
                 [],
                 |row| row.get::<_, Option<String>>(0),
             )
-            .optional()?
+            .optional()
+            .sql()?
             .flatten();
         Ok(value
             .map(|v| v.trim().to_string())
@@ -183,19 +182,19 @@ impl Reader {
     /// dual-polarity runs), convert each frame with
     /// [`BundleCalibration::for_frame`] instead.
     pub fn calibration(&self) -> Result<Calibration> {
-        Ok(*self.bundle_calibration()?.primary())
+        Ok(self.bundle_calibration()?.primary().clone())
     }
 
     /// Which TOF -> m/z model this bundle uses (see
     /// [`Reader::bundle_calibration`]).
     pub fn mz_calibration_model(&self) -> Result<MzCalibrationModel> {
-        Ok(self.bundle_calibration()?.status.model)
+        Ok(self.bundle_calibration()?.status().model)
     }
 
     /// The m/z model this bundle uses and, for the range fallback, why the
     /// calibration tables could not be used.
     pub fn mz_calibration_status(&self) -> Result<MzCalibrationStatus> {
-        Ok(self.bundle_calibration()?.status)
+        Ok(self.bundle_calibration()?.status().clone())
     }
 
     /// Build the calibration for every `MzCalibration` row the bundle's
@@ -217,7 +216,7 @@ impl Reader {
     pub fn bundle_calibration(&self) -> Result<BundleCalibration> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
 
-        let (im_intercept, im_slope) = mobility_calibration(&conn)?;
+        let mobility = mobility_calibration(&conn)?;
         let tof_max: Option<u32> =
             global_meta(&conn, "DigitizerNumSamples")?.and_then(|v| v.trim().parse().ok());
 
@@ -226,47 +225,32 @@ impl Reader {
                 let by_row: BTreeMap<u32, Calibration> = rows
                     .into_iter()
                     .map(|(id, m)| {
-                        let c = Calibration {
-                            mz: MzConversion::Tables(m),
-                            im_intercept,
-                            im_slope,
-                        };
+                        let c = Calibration::new(MzConversion::Tables(m), mobility.clone());
                         (id, c)
                     })
                     .collect();
-                let primary = by_row[&primary_id];
+                let primary = by_row[&primary_id].clone();
                 Ok(BundleCalibration::new(
-                    MzCalibrationStatus {
-                        model: MzCalibrationModel::Tables,
-                        fallback_reason: None,
-                    },
+                    MzCalibrationStatus::tables(),
                     primary,
                     by_row,
                 ))
             }
             Err(reason) => {
-                let (intercept, slope) = range_mz_calibration(&conn).map_err(|e| match e {
-                    Error::CorruptFrame(id, msg) => Error::CorruptFrame(
-                        id,
-                        format!("{msg} (calibration tables unusable: {reason})"),
-                    ),
+                let mz = range_mz_calibration(&conn).map_err(|e| match e {
+                    Error::InvalidMetadata(msg) => Error::InvalidMetadata(format!(
+                        "{msg} (calibration tables unusable: {reason})"
+                    )),
                     other => other,
                 })?;
                 log::warn!(
-                    "{}: m/z uses the acquisition-range fallback model, which can be off \
-                     by hundreds of ppm: {reason}",
+                    "{}: m/z uses the acquisition-range fallback model, which is less \
+                     accurate (2 to about 200 ppm median error on tested bundles): {reason}",
                     self.bundle_dir.display()
                 );
-                let primary = Calibration {
-                    mz: MzConversion::RangeFallback { intercept, slope },
-                    im_intercept,
-                    im_slope,
-                };
+                let primary = Calibration::new(mz, mobility);
                 Ok(BundleCalibration::new(
-                    MzCalibrationStatus {
-                        model: MzCalibrationModel::RangeFallback,
-                        fallback_reason: Some(reason),
-                    },
+                    MzCalibrationStatus::range_fallback(reason),
                     primary,
                     BTreeMap::new(),
                 ))
@@ -279,38 +263,35 @@ impl Reader {
     /// [`Reader::bundle_calibration`].
     pub fn range_fallback_calibration(&self) -> Result<Calibration> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let (im_intercept, im_slope) = mobility_calibration(&conn)?;
-        let (intercept, slope) = range_mz_calibration(&conn)?;
-        Ok(Calibration {
-            mz: MzConversion::RangeFallback { intercept, slope },
-            im_intercept,
-            im_slope,
-        })
+        let mobility = mobility_calibration(&conn)?;
+        let mz = range_mz_calibration(&conn)?;
+        Ok(Calibration::new(mz, mobility))
     }
 
     pub fn frame(&self, frame_id: u32) -> Result<Frame> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let frame = conn.query_row(
+        conn.query_row(
             "SELECT Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames WHERE Id = ?1",
             [frame_id],
             frame_from_row,
-        )?;
-        Ok(frame)
+        )
+        .sql()
     }
 
     /// All frames in ascending id order.
     pub fn frames(&self) -> Result<Vec<Frame>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let mut stmt = conn.prepare(
-            "SELECT Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
+        let mut stmt = conn
+            .prepare(
+                "SELECT Id, Time, NumScans, NumPeaks, TimsId, Polarity, ScanMode, MsMsType,
                     MzCalibration, AccumulationTime, SummedIntensities, MaxIntensity
              FROM Frames ORDER BY Id ASC",
-        )?;
-        let rows = stmt.query_map([], frame_from_row)?;
-        rows.collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(Error::from)
+            )
+            .sql()?;
+        let rows = stmt.query_map([], frame_from_row).sql()?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().sql()
     }
 
     /// Return the diaPASEF isolation windows for an MS2 frame (SPEC §8.1).
@@ -319,15 +300,7 @@ impl Reader {
     /// or the frame has no entry (e.g. an MS1 frame).
     pub fn dia_windows_for_frame(&self, frame_id: u32) -> Result<Option<DiaFrameWindows>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='DiaFrameMsMsInfo'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !table_exists {
+        if !table_exists(&conn, "DiaFrameMsMsInfo")? {
             return Ok(None);
         }
 
@@ -337,16 +310,19 @@ impl Reader {
                 [frame_id],
                 |row| row.get(0),
             )
-            .optional()?;
+            .optional()
+            .sql()?;
 
         let Some(wg) = window_group else {
             return Ok(None);
         };
 
-        let mut stmt = conn.prepare(
-            "SELECT WindowGroup, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth, CollisionEnergy
-             FROM DiaFrameMsMsWindows WHERE WindowGroup = ?1 ORDER BY ScanNumBegin ASC",
-        )?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT WindowGroup, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth, CollisionEnergy
+                 FROM DiaFrameMsMsWindows WHERE WindowGroup = ?1 ORDER BY ScanNumBegin ASC",
+            )
+            .sql()?;
         let windows: Vec<DiaWindow> = stmt
             .query_map([wg], |row| {
                 Ok(DiaWindow {
@@ -357,8 +333,10 @@ impl Reader {
                     isolation_width: row.get(4)?,
                     collision_energy: row.get(5)?,
                 })
-            })?
-            .collect::<std::result::Result<_, _>>()?;
+            })
+            .sql()?
+            .collect::<rusqlite::Result<_>>()
+            .sql()?;
 
         Ok(Some(DiaFrameWindows {
             frame_id,
@@ -373,23 +351,17 @@ impl Reader {
     /// this frame has no entries (e.g. an MS1 frame).
     pub fn pasef_msms_info_for_frame(&self, frame_id: u32) -> Result<Vec<PasefMsMsInfo>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PasefFrameMsMsInfo'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !table_exists {
+        if !table_exists(&conn, "PasefFrameMsMsInfo")? {
             return Ok(Vec::new());
         }
 
-        let mut stmt = conn.prepare(
-            "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
-                    CollisionEnergy, Precursor
-             FROM PasefFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
-        )?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
+                        CollisionEnergy, Precursor
+                 FROM PasefFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
+            )
+            .sql()?;
         let rows: Vec<PasefMsMsInfo> = stmt
             .query_map([frame_id], |row| {
                 Ok(PasefMsMsInfo {
@@ -401,8 +373,10 @@ impl Reader {
                     collision_energy: row.get(5)?,
                     precursor_id: row.get::<_, i64>(6)? as u32,
                 })
-            })?
-            .collect::<std::result::Result<_, _>>()?;
+            })
+            .sql()?
+            .collect::<rusqlite::Result<_>>()
+            .sql()?;
         Ok(rows)
     }
 
@@ -412,23 +386,17 @@ impl Reader {
     /// this frame has no entries (e.g. an MS1 frame).
     pub fn prm_msms_info_for_frame(&self, frame_id: u32) -> Result<Vec<PrmMsMsInfo>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PrmFrameMsMsInfo'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !table_exists {
+        if !table_exists(&conn, "PrmFrameMsMsInfo")? {
             return Ok(Vec::new());
         }
 
-        let mut stmt = conn.prepare(
-            "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
-                    CollisionEnergy, Target
-             FROM PrmFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
-        )?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT Frame, ScanNumBegin, ScanNumEnd, IsolationMz, IsolationWidth,
+                        CollisionEnergy, Target
+                 FROM PrmFrameMsMsInfo WHERE Frame = ?1 ORDER BY ScanNumBegin ASC",
+            )
+            .sql()?;
         let rows: Vec<PrmMsMsInfo> = stmt
             .query_map([frame_id], |row| {
                 Ok(PrmMsMsInfo {
@@ -440,8 +408,10 @@ impl Reader {
                     collision_energy: row.get(5)?,
                     target_id: row.get::<_, i64>(6)? as u32,
                 })
-            })?
-            .collect::<std::result::Result<_, _>>()?;
+            })
+            .sql()?
+            .collect::<rusqlite::Result<_>>()
+            .sql()?;
         Ok(rows)
     }
 
@@ -450,15 +420,7 @@ impl Reader {
     /// Returns `None` if the table is absent or the target ID does not exist.
     pub fn prm_target(&self, target_id: u32) -> Result<Option<PrmTarget>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PrmTargets'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !table_exists {
+        if !table_exists(&conn, "PrmTargets")? {
             return Ok(None);
         }
 
@@ -479,22 +441,15 @@ impl Reader {
                     })
                 },
             )
-            .optional()?;
+            .optional()
+            .sql()?;
         Ok(result)
     }
 
     /// Look up a single precursor by ID from the `Precursors` table (SPEC §8.2).
     pub fn precursor(&self, precursor_id: u32) -> Result<Option<Precursor>> {
         let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='Precursors'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !table_exists {
+        if !table_exists(&conn, "Precursors")? {
             return Ok(None);
         }
 
@@ -517,7 +472,8 @@ impl Reader {
                     })
                 },
             )
-            .optional()?;
+            .optional()
+            .sql()?;
         Ok(result)
     }
 
@@ -526,6 +482,14 @@ impl Reader {
     /// Dispatches on `GlobalMetadata.TimsCompressionType`:
     /// * `2` → SPEC §4.4 (byte-transposed, delta-TOF over zstd).
     /// * `1` → SPEC §4.5 (per-scan LZF with signed-int32 delta stream).
+    ///
+    /// # Errors
+    ///
+    /// `Error::CorruptFrame` when the frame block lies past the end of
+    /// `analysis.tdf_bin` (a truncated or empty file), when the block has
+    /// no payload but `Frames.NumPeaks` is not 0, or when the block does not
+    /// decode to `Frames.NumScans` scans and `Frames.NumPeaks` peaks.
+    /// `Error::UnsupportedCodec` for an unknown compression type.
     pub fn decode_peaks(&self, frame: &Frame) -> Result<Vec<Peak>> {
         match self.compression_type {
             2 => self.decode_peaks_codec2(frame),
@@ -534,11 +498,45 @@ impl Reader {
         }
     }
 
+    /// The 8-byte frame block header at `Frames.TimsId`. A header that
+    /// lies past the end of `analysis.tdf_bin` (a truncated or empty file)
+    /// is `Error::CorruptFrame` naming the frame, not a bare I/O error.
+    fn read_frame_header(&self, frame: &Frame) -> Result<[u8; 8]> {
+        let file_len = self.tdf_bin_len;
+        if checked_block_len(file_len, frame.tims_id, 8).is_none() {
+            return Err(Error::CorruptFrame(
+                frame.id,
+                format!(
+                    "frame block at offset {} is past the end of analysis.tdf_bin \
+                     (file_len {file_len}); the file is truncated or empty",
+                    frame.tims_id
+                ),
+            ));
+        }
+        let mut header = [0u8; 8];
+        read_at_exact(&self.tdf_bin, frame.tims_id, &mut header)?;
+        Ok(header)
+    }
+
+    /// A frame block with no payload. Valid only when `Frames.NumPeaks`
+    /// is 0; otherwise the peaks the frame table lists are missing.
+    fn empty_block(&self, frame: &Frame, block_size: u32) -> Result<Vec<Peak>> {
+        if frame.num_peaks == 0 {
+            return Ok(Vec::new());
+        }
+        Err(Error::CorruptFrame(
+            frame.id,
+            format!(
+                "block size {block_size} has no payload but Frames.NumPeaks is {}",
+                frame.num_peaks
+            ),
+        ))
+    }
+
     fn decode_peaks_codec2(&self, frame: &Frame) -> Result<Vec<Peak>> {
         let f = &self.tdf_bin;
 
-        let mut header = [0u8; 8];
-        read_at_exact(f, frame.tims_id, &mut header)?;
+        let header = self.read_frame_header(frame)?;
         let block_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -551,7 +549,7 @@ impl Reader {
             ));
         }
         if block_size <= 8 {
-            return Ok(Vec::new());
+            return self.empty_block(frame, block_size);
         }
 
         let payload_offset = frame.tims_id + 8;
@@ -583,7 +581,8 @@ impl Reader {
             ));
         }
 
-        Ok(decode_codec2(&inner, frame.num_scans, frame.num_peaks))
+        decode_codec2(&inner, frame.num_scans, frame.num_peaks)
+            .map_err(|e| Error::CorruptFrame(frame.id, e))
     }
 
     // Frame header and scan offset table layout ported from AlphaTims
@@ -593,8 +592,7 @@ impl Reader {
     fn decode_peaks_codec1(&self, frame: &Frame) -> Result<Vec<Peak>> {
         let f = &self.tdf_bin;
 
-        let mut header = [0u8; 8];
-        read_at_exact(f, frame.tims_id, &mut header)?;
+        let header = self.read_frame_header(frame)?;
         let bin_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let scan_count = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if scan_count != frame.num_scans {
@@ -606,7 +604,10 @@ impl Reader {
                 ),
             ));
         }
-        if bin_size <= 8 || frame.num_peaks == 0 {
+        if bin_size <= 8 {
+            return self.empty_block(frame, bin_size);
+        }
+        if frame.num_peaks == 0 {
             return Ok(Vec::new());
         }
 
@@ -671,67 +672,88 @@ impl Reader {
         let mut compressed = vec![0u8; compressed_len];
         read_at_exact(f, compressed_offset, &mut compressed)?;
 
-        decode_codec1(
+        let peaks = decode_codec1(
             &compressed,
             &scan_offsets,
             frame.num_peaks,
             self.max_num_peaks_per_scan.max(1) as usize,
         )
-        .map_err(|e| Error::CorruptFrame(frame.id, e))
+        .map_err(|e| Error::CorruptFrame(frame.id, e))?;
+        if peaks.len() != frame.num_peaks as usize {
+            return Err(Error::CorruptFrame(
+                frame.id,
+                format!(
+                    "decoded {} peaks but Frames.NumPeaks is {}",
+                    peaks.len(),
+                    frame.num_peaks
+                ),
+            ));
+        }
+        Ok(peaks)
     }
+}
+
+/// Whether `analysis.tdf` has a table called `name`.
+fn table_exists(conn: &Connection, name: &str) -> Result<bool> {
+    let n: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [name],
+            |row| row.get(0),
+        )
+        .sql()?;
+    Ok(n > 0)
 }
 
 /// `GlobalMetadata.Value` for `key`, `None` when the key is absent.
 fn global_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
-    Ok(conn
-        .query_row(
-            "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
-            [key],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()?)
+    conn.query_row(
+        "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
+        [key],
+        |row| row.get::<_, String>(0),
+    )
+    .optional()
+    .sql()
 }
 
 /// Like [`global_meta`] but a missing key is an error.
 fn required_global_meta(conn: &Connection, key: &str) -> Result<String> {
-    Ok(conn.query_row(
-        "SELECT Value FROM GlobalMetadata WHERE Key = ?1",
-        [key],
-        |row| row.get::<_, String>(0),
-    )?)
+    global_meta(conn, key)?
+        .ok_or_else(|| Error::InvalidMetadata(format!("GlobalMetadata.{key} is missing")))
 }
 
-/// `(im_intercept, im_slope)` of the linear scan -> 1/K0 model.
+/// Parse a numeric `GlobalMetadata` value. Unparseable values become NaN so
+/// the caller's range check reports them with the other values.
+fn parse_meta_f64(v: &str) -> f64 {
+    v.trim().parse().unwrap_or(f64::NAN)
+}
+
+/// The linear scan -> 1/K0 model.
 ///
 /// Ported from OpenTIMS `src/opentims++/scan2inv_ion_mobility_converter.cpp`,
 /// `OpenSourceScan2ImConverterFactory::produce()` (MIT License, Copyright (C)
 /// 2020-2026 Michal Startek and Mateusz Lacki). Changes: rewritten in Rust.
 /// See THIRD-PARTY-NOTICES.
-fn mobility_calibration(conn: &Connection) -> Result<(f64, f64)> {
-    let im_min: f64 = required_global_meta(conn, "OneOverK0AcqRangeLower")?
-        .trim()
-        .parse()
-        .unwrap_or(0.0);
-    let im_max: f64 = required_global_meta(conn, "OneOverK0AcqRangeUpper")?
-        .trim()
-        .parse()
-        .unwrap_or(0.0);
-    let scan_max: u32 = conn
+fn mobility_calibration(conn: &Connection) -> Result<MobilityConversion> {
+    let im_min = parse_meta_f64(&required_global_meta(conn, "OneOverK0AcqRangeLower")?);
+    let im_max = parse_meta_f64(&required_global_meta(conn, "OneOverK0AcqRangeUpper")?);
+    let scan_max: Option<u32> = conn
         .query_row("SELECT MAX(NumScans) FROM Frames", [], |row| row.get(0))
-        .unwrap_or(0);
-    if im_min <= 0.0 || im_max <= im_min || scan_max == 0 {
-        return Err(Error::CorruptFrame(
-            0,
-            format!(
-                "invalid mobility calibration metadata: min={im_min} max={im_max} scan_max={scan_max}"
-            ),
-        ));
+        .sql()?;
+    let scan_max = scan_max.unwrap_or(0);
+    // Written so NaN fails the check.
+    if !(im_min > 0.0 && im_max > im_min && scan_max > 0) {
+        return Err(Error::InvalidMetadata(format!(
+            "invalid mobility calibration metadata: min={im_min} max={im_max} scan_max={scan_max}"
+        )));
     }
-    Ok((im_max, (im_min - im_max) / f64::from(scan_max)))
+    Ok(MobilityConversion::acquisition_range(
+        im_max,
+        (im_min - im_max) / f64::from(scan_max),
+    ))
 }
 
-/// `(intercept, slope)` of the range-fallback model
-/// `sqrt(mz) = intercept + slope * tof`.
+/// The range-fallback model `sqrt(mz) = intercept + slope * tof`.
 ///
 /// Ported from OpenTIMS `src/opentims++/tof2mz_converter.cpp`,
 /// `OpenSourceTof2MzConverterFactory::produce()` (MIT License, Copyright (C)
@@ -739,15 +761,9 @@ fn mobility_calibration(conn: &Connection) -> Result<(f64, f64)> {
 /// otofControl widening originate in AlphaTims `alphatims/bruker.py`,
 /// `TimsTOF._import_data_from_d_folder()` (Apache License 2.0, Copyright
 /// 2020 MannLabs). Changes: rewritten in Rust. See THIRD-PARTY-NOTICES.
-fn range_mz_calibration(conn: &Connection) -> Result<(f64, f64)> {
-    let mut mz_min: f64 = required_global_meta(conn, "MzAcqRangeLower")?
-        .trim()
-        .parse()
-        .unwrap_or(0.0);
-    let mut mz_max: f64 = required_global_meta(conn, "MzAcqRangeUpper")?
-        .trim()
-        .parse()
-        .unwrap_or(0.0);
+fn range_mz_calibration(conn: &Connection) -> Result<MzConversion> {
+    let mut mz_min = parse_meta_f64(&required_global_meta(conn, "MzAcqRangeLower")?);
+    let mut mz_max = parse_meta_f64(&required_global_meta(conn, "MzAcqRangeUpper")?);
     let tof_max: u32 = required_global_meta(conn, "DigitizerNumSamples")?
         .trim()
         .parse()
@@ -757,17 +773,15 @@ fn range_mz_calibration(conn: &Connection) -> Result<(f64, f64)> {
         mz_min -= 5.0;
         mz_max += 5.0;
     }
-    if mz_min <= 0.0 || mz_max <= mz_min || tof_max == 0 {
-        return Err(Error::CorruptFrame(
-            0,
-            format!(
-                "invalid m/z calibration metadata: min={mz_min} max={mz_max} tof_max={tof_max}"
-            ),
-        ));
+    // Written so NaN fails the check.
+    if !(mz_min > 0.0 && mz_max > mz_min && tof_max > 0) {
+        return Err(Error::InvalidMetadata(format!(
+            "invalid m/z calibration metadata: min={mz_min} max={mz_max} tof_max={tof_max}"
+        )));
     }
     let intercept = mz_min.sqrt();
     let slope = (mz_max.sqrt() - mz_min.sqrt()) / f64::from(tof_max);
-    Ok((intercept, slope))
+    Ok(MzConversion::range_fallback(intercept, slope))
 }
 
 /// [`TablesMzModel`] for every `MzCalibration` row referenced by `Frames`,

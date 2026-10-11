@@ -244,8 +244,7 @@ fn pasef_msms_info_for_ms2_frame() {
 #[test]
 fn dia_windows_for_ms2_frame() {
     // PXD025576 is our verified diaPASEF bundle.
-    let Some(dir) =
-        common::pride_bundle("pride/PXD025576/20210503_TIMS05_PS_SA_WholeProt_DIAMAX_100ng_1.d")
+    let Some(dir) = common::pride_bundle("pride/PXD025576/191118_DIAMAX_G10_Slot1-62_1_459.d")
     else {
         return;
     };

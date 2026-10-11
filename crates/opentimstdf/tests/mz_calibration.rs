@@ -30,9 +30,10 @@ const MAX_PRECURSORS: usize = 2000;
 /// bundle), 0.83 ppm (PXD027359 DDA), 0.86 ppm (PXD080079, timsTOF HT), and
 /// 3.15 ppm on one third-party test fixture. A single TOF index of error
 /// adds 4 to 9 ppm at 0.2 ns/index, and using the wrong `MzCalibration` row
-/// or the range model adds tens to hundreds of ppm on most bundles, so 4 ppm
-/// separates a working model from those failures while tolerating the
-/// largest offset seen.
+/// adds 500 ppm or more, so 4 ppm separates a working model from those
+/// failures while tolerating the largest offset seen. (The range model can
+/// come within 2 ppm on some bundles; `mz_calibration_status_is_reported`
+/// checks which model is in use.)
 const MAX_MEDIAN_ABS_PPM: f64 = 4.0;
 
 struct PrecursorRow {
@@ -201,11 +202,11 @@ fn mz_calibration_matches_precursor_peaks() {
     }
     let r = Reader::open(&dir).expect("open");
     let bundle_cal = r.bundle_calibration().expect("calibration");
-    if bundle_cal.status.model != MzCalibrationModel::Tables {
+    if bundle_cal.status().model != MzCalibrationModel::Tables {
         eprintln!(
             "skipping: {} uses the range fallback ({:?})",
             dir.display(),
-            bundle_cal.status.fallback_reason
+            bundle_cal.status().fallback_reason
         );
         return;
     }
@@ -218,7 +219,7 @@ fn mz_calibration_matches_precursor_peaks() {
         if current.as_ref().map(|c| c.0) != Some(p.parent) {
             let frame = r.frame(p.parent).expect("parent frame");
             let peaks = r.decode_peaks(&frame).expect("decode parent frame");
-            current = Some((p.parent, peaks, *bundle_cal.for_frame(&frame)));
+            current = Some((p.parent, peaks, bundle_cal.for_frame(&frame)));
         }
         let Some((_, peaks, cal)) = current.as_ref() else {
             continue;
