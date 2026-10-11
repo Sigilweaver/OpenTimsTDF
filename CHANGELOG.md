@@ -6,7 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-Release 3.0.0. After this release, new fields, enum variants, calibration
+## [3.0.0] - 2026-10-11
+
+After this release, new fields, enum variants, calibration
 models and error variants are added in minor releases. See
 [MIGRATING-3.0.md](MIGRATING-3.0.md).
 
