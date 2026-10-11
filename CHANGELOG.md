@@ -6,6 +6,71 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+Release 3.0.0. After this release, new fields, enum variants, calibration
+models and error variants are added in minor releases. See
+[MIGRATING-3.0.md](MIGRATING-3.0.md).
+
+### Breaking
+
+- Requires `openmassspec-core` 3.0. `TdfSource` / `OwnedTdfSource`
+  `iter_spectra` and `iter_chromatograms` yield
+  `openmassspec_core::Result` items (`SpectrumIter` / `ChromatogramIter`).
+- A frame that cannot be decoded, or whose PASEF rows, diaPASEF windows or
+  precursor cannot be read, is an `Err` item instead of being skipped (a
+  failed precursor lookup used to drop only the precursor). Iteration
+  continues with the next frame. A failure while building the PRM
+  chromatograms makes `iter_chromatograms` yield a single `Err` instead of
+  leaving out the affected frame or target.
+- `mzml::write_mzml` and `mzml::write_indexed_mzml` return
+  `Result<openmassspec_core::WriteSummary>` (was `Result<()>`) and stop at
+  the first record that cannot be decoded.
+- `Error` is `#[non_exhaustive]`. `Error::Sqlite` wraps the new opaque
+  `SqliteError` instead of `rusqlite::Error`, and `From<rusqlite::Error> for
+  Error` is removed, so `rusqlite` is no longer part of the public API.
+  New variants `InvalidMetadata(String)` and
+  `Core(openmassspec_core::Error)`.
+- Invalid or missing calibration metadata (`OneOverK0AcqRange*`,
+  `MzAcqRange*`, `DigitizerNumSamples`) returns `Error::InvalidMetadata`;
+  it returned `Error::CorruptFrame(0, ..)` for out-of-range values and
+  `Error::Sqlite` for missing keys.
+- `Frame`, `Peak`, `Metadata`, `DiaWindow`, `DiaFrameWindows`,
+  `PasefMsMsInfo`, `PrmMsMsInfo`, `PrmTarget` and `Precursor` are
+  `#[non_exhaustive]`: fields stay public for reading, struct literals no
+  longer compile outside the crate. `Peak::new` is added.
+- `Calibration` fields are private and the type is no longer `Copy`. The
+  2.0 fields `mz_intercept`, `mz_slope`, `im_intercept` and `im_slope` are
+  replaced by `mz_conversion() -> &MzConversion` and
+  `mobility_conversion() -> &MobilityConversion`; build one with
+  `Calibration::new(mz, mobility)`. Conversion methods (`tof_to_mz`,
+  `tof_to_mz_f64`, `mz_to_tof`, `mz_to_tof_f64`, `scan_to_inv_mobility`,
+  `inv_mobility_to_scan`, `mz_model`) are unchanged.
+- `BundleCalibration::for_frame` returns an owned `Calibration` (was
+  `&Calibration`), so a per-frame correction can be added later without
+  another break. `BundleCalibration::status` is a method returning
+  `&MzCalibrationStatus` (was a public field).
+- `MzCalibrationModel`, `MzCalibrationStatus`, `MzConversion` (and its
+  `RangeFallback` variant) and `TablesMzModel` are `#[non_exhaustive]`;
+  `MzConversion` is no longer `Copy`. Build them with
+  `MzConversion::range_fallback` and `TablesMzModel::new`.
+- `decode_codec2` returns `Result<Vec<Peak>, String>` (was `Vec<Peak>`): a
+  buffer of the wrong length or per-scan peak counts that run past the
+  peak stream are errors instead of an empty or truncated peak list.
+  `Reader::decode_peaks` reports them as `Error::CorruptFrame`.
+- `Reader::metadata` returns SQLite errors instead of treating them as
+  absent keys, and `Error::InvalidMetadata` when `SchemaVersionMajor` or
+  `SchemaVersionMinor` is present but not an unsigned integer (was `0`).
+  `Reader::open` does the same for `MaxNumPeaksPerScan`.
+- `Reader::dia_windows_for_frame`, `pasef_msms_info_for_frame`,
+  `prm_msms_info_for_frame`, `prm_target` and `precursor` return SQLite
+  errors from the table-existence check instead of treating the table as
+  absent.
+- Python: `Calibration.im_intercept` / `im_slope` raise `RuntimeError` if
+  the 1/K0 model has no intercept/slope (every bundle today uses the
+  linear model). `Reader.iter_records()` raises `RuntimeError` on the first
+  frame that cannot be decoded and ends the stream, and
+  `Reader.read_chromatograms()` raises when the chromatograms cannot be
+  built.
+
 ### Added
 
 - `THIRD-PARTY-NOTICES`: copyright notices and license terms for code
@@ -22,6 +87,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   fallback, `opentimstdf.mz_calibration_fallback_reason`. Python:
   `Reader.mz_calibration_model()`, `Reader.mz_calibration_fallback_reason()`,
   `Calibration.mz_model`, and a `RuntimeWarning` on fallback.
+- `MobilityConversion` (scan to 1/K0 model, `AcquisitionRange` variant),
+  `Calibration::new`, `Calibration::mz_conversion`,
+  `Calibration::mobility_conversion`, `MzConversion::range_fallback`,
+  `MzConversion::model`, `MzConversion::tof_to_mz` / `mz_to_tof`,
+  `TablesMzModel::new`, `BundleCalibration::status`, `Peak::new`,
+  `SqliteError`, and `From<opentimstdf::Error> for
+  openmassspec_core::Error`.
 - `Reader::instrument_serial_number()`. mzML run metadata now carries the
   instrument serial number (`GlobalMetadata.InstrumentSerialNumber`) when the
   bundle records one.
@@ -33,9 +105,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Breaking:** `Calibration` replaces the `mz_intercept` and `mz_slope`
-  fields with `mz: MzConversion` (`Tables` or `RangeFallback`). Python
-  `Calibration.mz_intercept` / `mz_slope` return `None` for the tables model.
+- Python `Calibration.mz_intercept` / `mz_slope` return `None` for the
+  tables model.
 - mzML and Python `decode_spectrum` convert each frame with its own
   `MzCalibration` row, so dual-polarity runs use the right calibration per
   polarity.
@@ -65,6 +136,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   site route.
 - Codec-1 decode returns `CorruptFrame` when a scan offset points inside the
   frame header, instead of decoding the wrong bytes.
+- Codec-2 decode returns `CorruptFrame` when the per-scan peak counts run
+  past the peak stream, instead of returning a truncated peak list.
+- Rustdoc for the `mzml` module no longer links to private functions
+  (`cargo doc` with `-D warnings` failed).
 - Codec-1 decode no longer overflows on a TOF delta of `i32::MIN`.
 - mzML: diaPASEF spectra no longer report the isolation window center as the
   selected ion m/z. The isolation window target and width are kept; the
