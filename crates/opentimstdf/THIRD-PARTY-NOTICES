@@ -36,7 +36,7 @@ Ported items (from alphatims/bruker.py, as of release v1.0.10):
      its rebasing by 8 + 4 * (scan_count + 1).
 
   c. TimsTOF._import_data_from_d_folder(), metadata-based m/z estimate
-     -> crates/opentimstdf/src/reader.rs, Reader::calibration()
+     -> crates/opentimstdf/src/reader.rs, range_mz_calibration()
      Linear-in-sqrt(m/z) model between MzAcqRangeLower and
      MzAcqRangeUpper over DigitizerNumSamples, with the 5 m/z widening
      for "Bruker otofControl". OpenTimsTDF follows the OpenTIMS
@@ -69,7 +69,8 @@ Ported items (from src/opentims++/):
   b. tof2mz_converter.cpp, OpenSourceTof2MzConverterFactory::produce()
      and scan2inv_ion_mobility_converter.cpp,
      OpenSourceScan2ImConverterFactory::produce()
-     -> crates/opentimstdf/src/reader.rs, Reader::calibration()
+     -> crates/opentimstdf/src/reader.rs, range_mz_calibration() and
+        mobility_calibration()
      GlobalMetadata keys used, the otofControl widening, scan_max taken
      as MAX(Frames.NumScans), and the validity checks.
 

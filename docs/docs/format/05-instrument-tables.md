@@ -179,7 +179,7 @@ CollisionEnergy REAL     collision energy
 Presence: all acquisitions.
 
 ```
-KeyPolarity  TEXT  polarity qualifier; always "+" in corpus
+KeyPolarity  TEXT  polarity qualifier, "+" or "-" (dual-polarity bundles have both)
 KeyName      TEXT  parameter name (see below)
 Value        BLOB  parameter value (TEXT or binary IEEE-754 double array)
 ```
@@ -208,10 +208,9 @@ Observed `KeyName` values (PXD027359):
 Binary blobs are arrays of little-endian `f64` (IEEE-754 double)
 values; `len_bytes / 8` is the number of reference peaks.
 
-See [04-calibration.md](04-calibration.md#tof---mz-regressed-variant)
-for how `MeasuredTimesOfFlight` and `ReferencePeakMasses` together
-yield a < 2 ppm m/z calibration (not implemented by OpenTimsTDF, which
-uses the boundary variant).
+`MeasuredTimesOfFlight` is in ns. The `MzCalibration` row of the same
+polarity maps it to `MassesCorrectedCalibration`; see
+[04-calibration.md](04-calibration.md#where-the-model-comes-from).
 
 ## `FrameProperties` / `PropertyDefinitions`
 

@@ -18,7 +18,10 @@ pub mod mzml;
 pub mod reader;
 pub mod types;
 
-pub use calibration::Calibration;
+pub use calibration::{
+    BundleCalibration, Calibration, MzCalibrationModel, MzCalibrationStatus, MzConversion,
+    TablesMzModel,
+};
 pub use codec::{checked_block_len, decode_codec1, decode_codec2};
 pub use error::{Error, Result};
 pub use reader::Reader;
