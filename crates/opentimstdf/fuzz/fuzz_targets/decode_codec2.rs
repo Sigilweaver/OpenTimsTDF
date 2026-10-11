@@ -26,5 +26,9 @@ fuzz_target!(|data: &[u8]| {
         (0..need).map(|i| tail[i % tail.len()]).collect()
     };
 
-    let _ = decode_codec2(&inner, num_scans, num_peaks);
+    // A successful decode yields exactly `num_peaks` peaks; anything else
+    // must be reported as an error.
+    if let Ok(peaks) = decode_codec2(&inner, num_scans, num_peaks) {
+        assert_eq!(peaks.len(), num_peaks as usize);
+    }
 });

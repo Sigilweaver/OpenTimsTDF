@@ -54,17 +54,22 @@ fn main() -> ExitCode {
     let sum: u64 = peaks.iter().map(|p| u64::from(p.intensity)).sum();
     println!("decoded {} peaks, sum(intensity)={}", peaks.len(), sum);
 
-    let calib = reader.calibration().ok();
-    if let Some(c) = calib {
+    let calib = match reader.calibration() {
+        Ok(c) => Some(c),
+        Err(e) => {
+            eprintln!("calibration: {e} (printing raw peaks only)");
+            None
+        }
+    };
+    if let Some(c) = &calib {
         println!(
-            "calibration: mz model = {}   1/K0 = {:.6} + {:.6e} * scan",
+            "calibration: mz model = {}   1/K0 model = {:?}",
             c.mz_model(),
-            c.im_intercept,
-            c.im_slope
+            c.mobility_conversion()
         );
     }
     for p in peaks.iter().take(10) {
-        match calib {
+        match &calib {
             Some(c) => println!(
                 "  scan={:>5} tof={:>8} intensity={:>6}  mz={:>10.4}  1/K0={:.4}",
                 p.scan,

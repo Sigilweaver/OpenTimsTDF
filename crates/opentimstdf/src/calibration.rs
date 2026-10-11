@@ -40,13 +40,23 @@
 //!
 //! # Provenance
 //!
-//! The range-fallback m/z conversion and the 1/K0 conversion in
-//! [`Calibration`] are ported from OpenTIMS
+//! The range-fallback m/z conversion and the 1/K0 conversion
+//! ([`MzConversion`], [`MobilityConversion`]) are ported from OpenTIMS
 //! `src/opentims++/tof2mz_converter.cpp` (`OpenSourceTof2MzConverter`) and
 //! `src/opentims++/scan2inv_ion_mobility_converter.cpp`
 //! (`OpenSourceScan2ImConverter`), MIT License, Copyright (C) 2020-2026
 //! Michal Startek and Mateusz Lacki. Changes: rewritten in Rust. See
 //! THIRD-PARTY-NOTICES. The tables model is not ported from either project.
+//!
+//! # Extending the models
+//!
+//! [`MzCalibrationModel`], [`MzConversion`], [`MobilityConversion`],
+//! [`TablesMzModel`] and [`MzCalibrationStatus`] are `#[non_exhaustive]`, and
+//! [`Calibration`] keeps its fields private, so new models (for example a
+//! temperature correction or a `TimsCalibration`-based 1/K0 model) and new
+//! coefficients can be added in minor releases. [`BundleCalibration::for_frame`]
+//! returns an owned [`Calibration`] so a per-frame correction can be applied
+//! there without changing its signature.
 //!
 //! [`Reader::bundle_calibration`]: crate::Reader::bundle_calibration
 
@@ -54,7 +64,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 /// Which TOF -> m/z model a [`Calibration`] uses.
+///
+/// New models may be added in minor releases; match with a `_` arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MzCalibrationModel {
     /// [`TablesMzModel`], built from the bundle's `MzCalibration` table.
     Tables,
@@ -81,11 +94,30 @@ impl fmt::Display for MzCalibrationModel {
 
 /// Which m/z model a bundle uses, and why the fallback was chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MzCalibrationStatus {
     pub model: MzCalibrationModel,
     /// Why the calibration tables could not be used. `Some` exactly when
     /// `model` is [`MzCalibrationModel::RangeFallback`].
     pub fallback_reason: Option<String>,
+}
+
+impl MzCalibrationStatus {
+    /// Status of a bundle that uses its calibration tables.
+    pub(crate) fn tables() -> Self {
+        Self {
+            model: MzCalibrationModel::Tables,
+            fallback_reason: None,
+        }
+    }
+
+    /// Status of a bundle that uses the range fallback, with the reason.
+    pub(crate) fn range_fallback(reason: impl Into<String>) -> Self {
+        Self {
+            model: MzCalibrationModel::RangeFallback,
+            fallback_reason: Some(reason.into()),
+        }
+    }
 }
 
 /// TOF -> m/z model from one `MzCalibration` row (`ModelType = 1`).
@@ -94,7 +126,11 @@ pub struct MzCalibrationStatus {
 /// t(tof) = digitizer_delay + digitizer_timebase * tof          (ns)
 /// t(mz)  = c0 + (1e6 / sqrt(c1)) * sqrt(mz + c4) + c2 * mz     (ns)
 /// ```
+///
+/// Fields are public for reading. New coefficients may be added in minor
+/// releases; build values with [`TablesMzModel::new`].
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct TablesMzModel {
     /// `MzCalibration.DigitizerTimebase`: ns per TOF index.
     pub digitizer_timebase: f64,
@@ -111,6 +147,27 @@ pub struct TablesMzModel {
 }
 
 impl TablesMzModel {
+    /// Model from the `MzCalibration` columns `DigitizerTimebase`,
+    /// `DigitizerDelay`, `C0`, `C1`, `C2` and `C4`, in that order. The values
+    /// are not checked; use [`Self::validate`].
+    pub fn new(
+        digitizer_timebase: f64,
+        digitizer_delay: f64,
+        c0: f64,
+        c1: f64,
+        c2: f64,
+        c4: f64,
+    ) -> Self {
+        Self {
+            digitizer_timebase,
+            digitizer_delay,
+            c0,
+            c1,
+            c2,
+            c4,
+        }
+    }
+
     /// Flight-time slope `1e6 / sqrt(c1)`, in ns per sqrt(Da).
     fn k(&self) -> f64 {
         1e6 / self.c1.sqrt()
@@ -187,40 +244,36 @@ impl TablesMzModel {
 }
 
 /// The TOF -> m/z half of a [`Calibration`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// New variants may be added in minor releases; match with a `_` arm.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum MzConversion {
     /// Model from the bundle's `MzCalibration` table.
     Tables(TablesMzModel),
     /// `sqrt(mz) = intercept + slope * tof`, from the acquisition m/z range.
+    /// Build with [`MzConversion::range_fallback`].
+    #[non_exhaustive]
     RangeFallback { intercept: f64, slope: f64 },
 }
 
-/// TOF <-> m/z and scan <-> 1/K0 conversion for one `MzCalibration` row.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Calibration {
-    pub mz: MzConversion,
-    /// `1/K0 = im_intercept + im_slope * scan`
-    pub im_intercept: f64,
-    pub im_slope: f64,
-}
+impl MzConversion {
+    /// The range-fallback model `sqrt(mz) = intercept + slope * tof`.
+    pub fn range_fallback(intercept: f64, slope: f64) -> Self {
+        MzConversion::RangeFallback { intercept, slope }
+    }
 
-impl Calibration {
-    /// Which m/z model this calibration uses.
-    pub fn mz_model(&self) -> MzCalibrationModel {
-        match self.mz {
+    /// Which model this is.
+    pub fn model(&self) -> MzCalibrationModel {
+        match self {
             MzConversion::Tables(_) => MzCalibrationModel::Tables,
             MzConversion::RangeFallback { .. } => MzCalibrationModel::RangeFallback,
         }
     }
 
-    pub fn tof_to_mz(&self, tof: u32) -> f64 {
-        self.tof_to_mz_f64(f64::from(tof))
-    }
-
-    /// [`Self::tof_to_mz`] for a fractional TOF index (for example a peak
-    /// centroid).
-    pub fn tof_to_mz_f64(&self, tof: f64) -> f64 {
-        match self.mz {
+    /// m/z of a (possibly fractional) TOF index.
+    pub fn tof_to_mz(&self, tof: f64) -> f64 {
+        match self {
             MzConversion::Tables(m) => m.tof_to_mz(tof),
             MzConversion::RangeFallback { intercept, slope } => {
                 let v = intercept + slope * tof;
@@ -229,35 +282,119 @@ impl Calibration {
         }
     }
 
-    /// Nearest TOF index of an m/z, clamped at 0.
-    pub fn mz_to_tof(&self, mz: f64) -> u32 {
-        let v = self.mz_to_tof_f64(mz);
-        if v > 0.0 {
-            (v + 0.5) as u32
-        } else {
-            0
-        }
-    }
-
     /// Fractional TOF index of an m/z, without rounding or clamping.
-    pub fn mz_to_tof_f64(&self, mz: f64) -> f64 {
-        match self.mz {
+    pub fn mz_to_tof(&self, mz: f64) -> f64 {
+        match self {
             MzConversion::Tables(m) => m.mz_to_tof(mz),
             MzConversion::RangeFallback { intercept, slope } => (mz.sqrt() - intercept) / slope,
         }
     }
+}
 
-    pub fn scan_to_inv_mobility(&self, scan: u32) -> f64 {
-        self.im_intercept + self.im_slope * f64::from(scan)
+/// The scan -> 1/K0 half of a [`Calibration`].
+///
+/// New variants may be added in minor releases; match with a `_` arm.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum MobilityConversion {
+    /// `1/K0 = intercept + slope * scan`, between
+    /// `GlobalMetadata.OneOverK0AcqRangeUpper` (scan 0) and
+    /// `OneOverK0AcqRangeLower` (scan `MAX(Frames.NumScans)`). Build with
+    /// [`MobilityConversion::acquisition_range`].
+    #[non_exhaustive]
+    AcquisitionRange { intercept: f64, slope: f64 },
+}
+
+impl MobilityConversion {
+    /// The linear model `1/K0 = intercept + slope * scan`.
+    pub fn acquisition_range(intercept: f64, slope: f64) -> Self {
+        MobilityConversion::AcquisitionRange { intercept, slope }
     }
 
-    pub fn inv_mobility_to_scan(&self, inv_mobility: f64) -> u32 {
-        let v = (inv_mobility - self.im_intercept) / self.im_slope;
-        if v > 0.0 {
-            (v + 0.5) as u32
-        } else {
-            0
+    /// 1/K0 of a (possibly fractional) scan index.
+    pub fn scan_to_inv_mobility(&self, scan: f64) -> f64 {
+        match self {
+            MobilityConversion::AcquisitionRange { intercept, slope } => intercept + slope * scan,
         }
+    }
+
+    /// Fractional scan index of a 1/K0 value, without rounding or clamping.
+    pub fn inv_mobility_to_scan(&self, inv_mobility: f64) -> f64 {
+        match self {
+            MobilityConversion::AcquisitionRange { intercept, slope } => {
+                (inv_mobility - intercept) / slope
+            }
+        }
+    }
+}
+
+/// TOF <-> m/z and scan <-> 1/K0 conversion for one `MzCalibration` row.
+///
+/// Get one from [`crate::Reader::calibration`] or
+/// [`BundleCalibration::for_frame`], or build one with [`Calibration::new`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Calibration {
+    mz: MzConversion,
+    mobility: MobilityConversion,
+}
+
+impl Calibration {
+    pub fn new(mz: MzConversion, mobility: MobilityConversion) -> Self {
+        Self { mz, mobility }
+    }
+
+    /// The TOF -> m/z model.
+    pub fn mz_conversion(&self) -> &MzConversion {
+        &self.mz
+    }
+
+    /// The scan -> 1/K0 model.
+    pub fn mobility_conversion(&self) -> &MobilityConversion {
+        &self.mobility
+    }
+
+    /// Which m/z model this calibration uses.
+    pub fn mz_model(&self) -> MzCalibrationModel {
+        self.mz.model()
+    }
+
+    /// m/z of a TOF index.
+    pub fn tof_to_mz(&self, tof: u32) -> f64 {
+        self.mz.tof_to_mz(f64::from(tof))
+    }
+
+    /// [`Self::tof_to_mz`] for a fractional TOF index (for example a peak
+    /// centroid).
+    pub fn tof_to_mz_f64(&self, tof: f64) -> f64 {
+        self.mz.tof_to_mz(tof)
+    }
+
+    /// Nearest TOF index of an m/z, clamped at 0.
+    pub fn mz_to_tof(&self, mz: f64) -> u32 {
+        round_clamped(self.mz.mz_to_tof(mz))
+    }
+
+    /// Fractional TOF index of an m/z, without rounding or clamping.
+    pub fn mz_to_tof_f64(&self, mz: f64) -> f64 {
+        self.mz.mz_to_tof(mz)
+    }
+
+    /// 1/K0 of a scan index.
+    pub fn scan_to_inv_mobility(&self, scan: u32) -> f64 {
+        self.mobility.scan_to_inv_mobility(f64::from(scan))
+    }
+
+    /// Nearest scan index of a 1/K0 value, clamped at 0.
+    pub fn inv_mobility_to_scan(&self, inv_mobility: f64) -> u32 {
+        round_clamped(self.mobility.inv_mobility_to_scan(inv_mobility))
+    }
+}
+
+fn round_clamped(v: f64) -> u32 {
+    if v > 0.0 {
+        (v + 0.5) as u32
+    } else {
+        0
     }
 }
 
@@ -268,7 +405,7 @@ impl Calibration {
 /// use [`BundleCalibration::for_frame`].
 #[derive(Debug, Clone)]
 pub struct BundleCalibration {
-    pub status: MzCalibrationStatus,
+    status: MzCalibrationStatus,
     primary: Calibration,
     by_row: BTreeMap<u32, Calibration>,
 }
@@ -286,6 +423,11 @@ impl BundleCalibration {
         }
     }
 
+    /// Which m/z model the bundle uses and, for the range fallback, why.
+    pub fn status(&self) -> &MzCalibrationStatus {
+        &self.status
+    }
+
     /// Calibration for the `MzCalibration` row referenced by the most frames
     /// (lowest row id on a tie). This is what [`crate::Reader::calibration`]
     /// returns. With the range fallback every row maps to it.
@@ -299,9 +441,11 @@ impl BundleCalibration {
         self.by_row.get(&id).unwrap_or(&self.primary)
     }
 
-    /// Calibration for a frame (by its `mz_calibration_id`).
-    pub fn for_frame(&self, frame: &crate::Frame) -> &Calibration {
-        self.for_mz_calibration_id(frame.mz_calibration_id)
+    /// Calibration to convert one frame's peaks with. Currently the
+    /// calibration of the frame's `MzCalibration` row
+    /// ([`Self::for_mz_calibration_id`]).
+    pub fn for_frame(&self, frame: &crate::Frame) -> Calibration {
+        self.for_mz_calibration_id(frame.mz_calibration_id).clone()
     }
 }
 
@@ -450,30 +594,28 @@ mod tests {
 
     #[test]
     fn range_fallback_math() {
-        let c = Calibration {
-            mz: MzConversion::RangeFallback {
-                intercept: 10.0,
-                slope: 1e-4,
-            },
-            im_intercept: 1.6,
-            im_slope: -0.001,
-        };
+        let c = Calibration::new(
+            MzConversion::range_fallback(10.0, 1e-4),
+            MobilityConversion::acquisition_range(1.6, -0.001),
+        );
         assert_eq!(c.mz_model(), MzCalibrationModel::RangeFallback);
         assert!((c.tof_to_mz(0) - 100.0).abs() < 1e-12);
         assert!((c.tof_to_mz(100_000) - 400.0).abs() < 1e-9);
         assert_eq!(c.mz_to_tof(400.0), 100_000);
         assert_eq!(c.mz_to_tof(1.0), 0);
         assert!((c.tof_to_mz_f64(50_000.5) - 225.001_500_002_5).abs() < 1e-6);
+        assert!((c.scan_to_inv_mobility(100) - 1.5).abs() < 1e-12);
+        assert_eq!(c.inv_mobility_to_scan(1.5), 100);
+        assert_eq!(c.inv_mobility_to_scan(2.0), 0);
     }
 
     #[test]
     fn calibration_dispatches_to_tables() {
         let m = linear_row();
-        let c = Calibration {
-            mz: MzConversion::Tables(m),
-            im_intercept: 1.6,
-            im_slope: -0.001,
-        };
+        let c = Calibration::new(
+            MzConversion::Tables(m),
+            MobilityConversion::acquisition_range(1.6, -0.001),
+        );
         assert_eq!(c.mz_model(), MzCalibrationModel::Tables);
         assert_eq!(c.tof_to_mz(1234), m.tof_to_mz(1234.0));
         assert_eq!(c.mz_to_tof(c.tof_to_mz(1234)), 1234);
@@ -482,23 +624,22 @@ mod tests {
 
     #[test]
     fn bundle_calibration_lookup() {
-        let mk = |m: TablesMzModel| Calibration {
-            mz: MzConversion::Tables(m),
-            im_intercept: 1.6,
-            im_slope: -0.001,
+        let mk = |m: TablesMzModel| {
+            Calibration::new(
+                MzConversion::Tables(m),
+                MobilityConversion::acquisition_range(1.6, -0.001),
+            )
         };
         let a = mk(linear_row());
         let b = mk(curved_row());
         let bc = BundleCalibration::new(
-            MzCalibrationStatus {
-                model: MzCalibrationModel::Tables,
-                fallback_reason: None,
-            },
-            a,
-            BTreeMap::from([(1, a), (2, b)]),
+            MzCalibrationStatus::tables(),
+            a.clone(),
+            BTreeMap::from([(1, a.clone()), (2, b.clone())]),
         );
         assert_eq!(*bc.primary(), a);
         assert_eq!(*bc.for_mz_calibration_id(2), b);
         assert_eq!(*bc.for_mz_calibration_id(9), a);
+        assert_eq!(bc.status().model, MzCalibrationModel::Tables);
     }
 }

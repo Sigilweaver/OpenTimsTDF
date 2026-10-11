@@ -71,17 +71,27 @@ pub fn checked_block_len(file_len: u64, offset: u64, claimed_len: u64) -> Option
 /// De-transpose and decode a codec-2 inner buffer. See SPEC §4.4.
 ///
 /// This is total: any `inner`, `num_scans`, `num_peaks` combination returns
-/// without panicking. `Reader::decode_peaks` validates that
-/// `inner.len() == 4 * (num_scans + 2 * num_peaks)` before calling, but a
-/// corrupt frame can still carry header scan-lengths that over-run the peak
-/// stream even with a correctly sized buffer, so every stream read is
-/// bounds-checked and decoding stops cleanly when the stream is exhausted.
-pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> {
+/// without panicking.
+///
+/// # Errors
+///
+/// Returns a description of the problem when `inner.len()` is not
+/// `4 * (num_scans + 2 * num_peaks)`, or when the per-scan peak counts in
+/// the header run past the end of the peak stream (a corrupt frame).
+pub fn decode_codec2(
+    inner: &[u8],
+    num_scans: u32,
+    num_peaks: u32,
+) -> std::result::Result<Vec<Peak>, String> {
     let dsints = num_scans as usize + 2 * num_peaks as usize;
     // Guard the de-transpose slicing directly so malformed input to this
     // public function cannot panic.
     if inner.len() != 4 * dsints {
-        return Vec::new();
+        return Err(format!(
+            "inner buffer is {} bytes, expected {} for {num_scans} scans and {num_peaks} peaks",
+            inner.len(),
+            4 * dsints
+        ));
     }
 
     let b0 = &inner[0..dsints];
@@ -106,14 +116,17 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
     let mut read: usize = 0;
 
     if ns >= 2 {
-        'scans: for scan in 0..(ns - 1) {
+        for scan in 0..(ns - 1) {
             let peaks_in_scan = (header[scan + 1] / 2) as usize;
             let mut accum: u32 = u32::MAX;
             for _ in 0..peaks_in_scan {
                 let (Some(&delta), Some(&intensity)) =
                     (peak_stream.get(read), peak_stream.get(read + 1))
                 else {
-                    break 'scans;
+                    return Err(format!(
+                        "scan {scan} header claims {peaks_in_scan} peaks, which runs past \
+                         the {num_peaks}-peak stream"
+                    ));
                 };
                 accum = accum.wrapping_add(delta);
                 read += 2;
@@ -131,7 +144,10 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
     while peaks.len() < np {
         let (Some(&delta), Some(&intensity)) = (peak_stream.get(read), peak_stream.get(read + 1))
         else {
-            break;
+            return Err(format!(
+                "peak stream ended after {} of {num_peaks} peaks",
+                peaks.len()
+            ));
         };
         accum = accum.wrapping_add(delta);
         read += 2;
@@ -142,7 +158,7 @@ pub fn decode_codec2(inner: &[u8], num_scans: u32, num_peaks: u32) -> Vec<Peak> 
         });
     }
 
-    peaks
+    Ok(peaks)
 }
 
 /// Decode a codec-1 ("legacy packed") frame payload. See SPEC §4.5.
@@ -313,20 +329,20 @@ mod tests {
     }
 
     #[test]
-    fn decode_codec2_wrong_length_returns_empty() {
+    fn decode_codec2_wrong_length_is_an_error() {
         // dsints = 3 + 2*2 = 7, so the expected buffer is 28 bytes.
-        assert!(decode_codec2(&[], 3, 2).is_empty());
-        assert!(decode_codec2(&[0u8; 27], 3, 2).is_empty());
+        assert!(decode_codec2(&[], 3, 2).is_err());
+        assert!(decode_codec2(&[0u8; 27], 3, 2).is_err());
     }
 
     #[test]
-    fn decode_codec2_corrupt_header_does_not_panic() {
+    fn decode_codec2_corrupt_header_is_an_error() {
         // Correct length (28 bytes) but header scan-lengths claim far more
-        // peaks than the stream holds. Must stop cleanly, not panic.
+        // peaks than the stream holds. Must return an error, not panic.
         let logical = [0u32, 1000, 1000, 1, 100, 5, 200];
         let inner = build_inner(&logical);
-        let peaks = decode_codec2(&inner, 3, 2);
-        assert!(peaks.len() <= 2);
+        let err = decode_codec2(&inner, 3, 2).unwrap_err();
+        assert!(err.contains("runs past"), "{err}");
     }
 
     #[test]
@@ -336,7 +352,7 @@ mod tests {
         // accum starts at u32::MAX; +1 wraps to 0, +5 wraps to 4.
         let logical = [0u32, 2, 2, 1, 100, 5, 200];
         let inner = build_inner(&logical);
-        let peaks = decode_codec2(&inner, 3, 2);
+        let peaks = decode_codec2(&inner, 3, 2).expect("valid frame");
         assert_eq!(peaks.len(), 2);
         assert_eq!(
             (peaks[0].scan, peaks[0].tof, peaks[0].intensity),

@@ -19,11 +19,11 @@ pub mod reader;
 pub mod types;
 
 pub use calibration::{
-    BundleCalibration, Calibration, MzCalibrationModel, MzCalibrationStatus, MzConversion,
-    TablesMzModel,
+    BundleCalibration, Calibration, MobilityConversion, MzCalibrationModel, MzCalibrationStatus,
+    MzConversion, TablesMzModel,
 };
 pub use codec::{checked_block_len, decode_codec1, decode_codec2};
-pub use error::{Error, Result};
+pub use error::{Error, Result, SqliteError};
 pub use reader::Reader;
 pub use types::{
     DiaFrameWindows, DiaWindow, Frame, Metadata, PasefMsMsInfo, Peak, Precursor, PrmMsMsInfo,

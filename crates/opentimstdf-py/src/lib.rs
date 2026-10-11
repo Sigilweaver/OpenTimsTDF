@@ -18,9 +18,9 @@ use pyo3::prelude::*;
 use ::opentimstdf::{
     BundleCalibration as RsBundleCalibration, Calibration as RsCalibration,
     DiaFrameWindows as RsDiaFrameWindows, DiaWindow as RsDiaWindow, Frame as RsFrame,
-    Metadata as RsMetadata, MzConversion, PasefMsMsInfo as RsPasefMsMsInfo, Peak as RsPeak,
-    Precursor as RsPrecursor, PrmMsMsInfo as RsPrmMsMsInfo, PrmTarget as RsPrmTarget,
-    Reader as RsReader,
+    Metadata as RsMetadata, MobilityConversion, MzConversion, PasefMsMsInfo as RsPasefMsMsInfo,
+    Peak as RsPeak, Precursor as RsPrecursor, PrmMsMsInfo as RsPrmMsMsInfo,
+    PrmTarget as RsPrmTarget, Reader as RsReader,
 };
 
 fn to_py_err(e: ::opentimstdf::Error) -> PyErr {
@@ -106,12 +106,16 @@ fn normalize_record_json(value: &mut serde_json::Value) {
     }
 }
 
+/// One message from the decode thread: a record, a decode error (after
+/// which the thread stops), or `None` at the end of the stream.
+type RecordMessage = Option<Result<SpectrumRecord, String>>;
+
 /// Bounded stream of canonical spectrum records, decoded one frame at a time.
 #[pyclass(module = "opentimstdf")]
 struct RecordIter {
     // `None` marks a complete stream, so a closed channel without it means
     // the decode thread died.
-    receiver: Mutex<Receiver<Option<SpectrumRecord>>>,
+    receiver: Mutex<Receiver<RecordMessage>>,
     finished: bool,
 }
 
@@ -134,7 +138,11 @@ impl RecordIter {
                 .map_err(|_| "record decode thread ended without a result")
         });
         match message {
-            Ok(Some(rec)) => record_object(py, rec).map(Some),
+            Ok(Some(Ok(rec))) => record_object(py, rec).map(Some),
+            Ok(Some(Err(error))) => {
+                slf.finished = true;
+                Err(PyRuntimeError::new_err(error))
+            }
             Ok(None) => {
                 slf.finished = true;
                 Ok(None)
@@ -185,38 +193,77 @@ impl From<RsPeak> for Peak {
 #[pyclass(module = "opentimstdf", name = "Frame", from_py_object)]
 #[derive(Clone)]
 struct Frame {
-    #[pyo3(get)]
-    id: u32,
-    #[pyo3(get)]
-    time: f64,
-    #[pyo3(get)]
-    num_scans: u32,
-    #[pyo3(get)]
-    num_peaks: u32,
-    #[pyo3(get)]
-    tims_id: u64,
-    #[pyo3(get)]
-    polarity_symbol: String,
-    #[pyo3(get)]
-    scan_mode: u32,
-    #[pyo3(get)]
-    msms_type: u32,
-    #[pyo3(get)]
-    mz_calibration_id: u32,
-    #[pyo3(get)]
-    accumulation_time: Option<f64>,
-    #[pyo3(get)]
-    summed_intensities: Option<u64>,
-    #[pyo3(get)]
-    max_intensity: Option<u64>,
+    inner: RsFrame,
 }
 
 #[pymethods]
 impl Frame {
+    #[getter]
+    fn id(&self) -> u32 {
+        self.inner.id
+    }
+
+    /// Retention time in seconds.
+    #[getter]
+    fn time(&self) -> f64 {
+        self.inner.time
+    }
+
+    #[getter]
+    fn num_scans(&self) -> u32 {
+        self.inner.num_scans
+    }
+
+    #[getter]
+    fn num_peaks(&self) -> u32 {
+        self.inner.num_peaks
+    }
+
+    #[getter]
+    fn tims_id(&self) -> u64 {
+        self.inner.tims_id
+    }
+
+    /// `Frames.Polarity` as stored (`"+"` or `"-"`).
+    #[getter]
+    fn polarity_symbol(&self) -> String {
+        self.inner.polarity.clone()
+    }
+
+    #[getter]
+    fn scan_mode(&self) -> u32 {
+        self.inner.scan_mode
+    }
+
+    #[getter]
+    fn msms_type(&self) -> u32 {
+        self.inner.msms_type
+    }
+
+    #[getter]
+    fn mz_calibration_id(&self) -> u32 {
+        self.inner.mz_calibration_id
+    }
+
+    #[getter]
+    fn accumulation_time(&self) -> Option<f64> {
+        self.inner.accumulation_time
+    }
+
+    #[getter]
+    fn summed_intensities(&self) -> Option<u64> {
+        self.inner.summed_intensities
+    }
+
+    #[getter]
+    fn max_intensity(&self) -> Option<u64> {
+        self.inner.max_intensity
+    }
+
     /// Ion polarity read from `Frames.Polarity`.
     #[getter]
     fn polarity(&self) -> &'static str {
-        match self.polarity_symbol.as_str() {
+        match self.inner.polarity.as_str() {
             "-" => "negative",
             "+" => "positive",
             _ => "unknown",
@@ -226,27 +273,18 @@ impl Frame {
     fn __repr__(&self) -> String {
         format!(
             "Frame(id={}, time={:.3}, num_scans={}, num_peaks={}, msms_type={})",
-            self.id, self.time, self.num_scans, self.num_peaks, self.msms_type
+            self.inner.id,
+            self.inner.time,
+            self.inner.num_scans,
+            self.inner.num_peaks,
+            self.inner.msms_type
         )
     }
 }
 
 impl From<RsFrame> for Frame {
-    fn from(f: RsFrame) -> Self {
-        Self {
-            id: f.id,
-            time: f.time,
-            num_scans: f.num_scans,
-            num_peaks: f.num_peaks,
-            tims_id: f.tims_id,
-            polarity_symbol: f.polarity,
-            scan_mode: f.scan_mode,
-            msms_type: f.msms_type,
-            mz_calibration_id: f.mz_calibration_id,
-            accumulation_time: f.accumulation_time,
-            summed_intensities: f.summed_intensities,
-            max_intensity: f.max_intensity,
-        }
+    fn from(inner: RsFrame) -> Self {
+        Self { inner }
     }
 }
 
@@ -304,7 +342,7 @@ impl From<RsMetadata> for Metadata {
 // -- Calibration -------------------------------------------------------------
 
 #[pyclass(module = "opentimstdf", name = "Calibration", from_py_object)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Calibration {
     inner: RsCalibration,
 }
@@ -321,29 +359,41 @@ impl Calibration {
     /// `None` when `mz_model` is `"tables"`.
     #[getter]
     fn mz_intercept(&self) -> Option<f64> {
-        match self.inner.mz {
-            MzConversion::RangeFallback { intercept, .. } => Some(intercept),
-            MzConversion::Tables(_) => None,
+        match self.inner.mz_conversion() {
+            MzConversion::RangeFallback { intercept, .. } => Some(*intercept),
+            _ => None,
         }
     }
 
     /// Range-fallback slope. `None` when `mz_model` is `"tables"`.
     #[getter]
     fn mz_slope(&self) -> Option<f64> {
-        match self.inner.mz {
-            MzConversion::RangeFallback { slope, .. } => Some(slope),
-            MzConversion::Tables(_) => None,
+        match self.inner.mz_conversion() {
+            MzConversion::RangeFallback { slope, .. } => Some(*slope),
+            _ => None,
         }
     }
 
+    /// Intercept of the linear 1/K0 model (`1/K0 = im_intercept + im_slope * scan`).
     #[getter]
-    fn im_intercept(&self) -> f64 {
-        self.inner.im_intercept
+    fn im_intercept(&self) -> PyResult<f64> {
+        match self.inner.mobility_conversion() {
+            MobilityConversion::AcquisitionRange { intercept, .. } => Ok(*intercept),
+            other => Err(PyRuntimeError::new_err(format!(
+                "1/K0 model {other:?} has no intercept"
+            ))),
+        }
     }
 
+    /// Slope of the linear 1/K0 model.
     #[getter]
-    fn im_slope(&self) -> f64 {
-        self.inner.im_slope
+    fn im_slope(&self) -> PyResult<f64> {
+        match self.inner.mobility_conversion() {
+            MobilityConversion::AcquisitionRange { slope, .. } => Ok(*slope),
+            other => Err(PyRuntimeError::new_err(format!(
+                "1/K0 model {other:?} has no slope"
+            ))),
+        }
     }
 
     fn tof_to_mz(&self, tof: u32) -> f64 {
@@ -363,19 +413,25 @@ impl Calibration {
     }
 
     fn __repr__(&self) -> String {
-        let mz = match self.inner.mz {
+        let mz = match self.inner.mz_conversion() {
             MzConversion::Tables(m) => format!(
                 "tables(delay={}, timebase={}, C0={}, C1={}, C2={}, C4={})",
                 m.digitizer_delay, m.digitizer_timebase, m.c0, m.c1, m.c2, m.c4
             ),
-            MzConversion::RangeFallback { intercept, slope } => {
+            MzConversion::RangeFallback {
+                intercept, slope, ..
+            } => {
                 format!("range_fallback(({intercept:.6}+{slope:.6e}*tof)^2)")
             }
+            other => format!("{other:?}"),
         };
-        format!(
-            "Calibration(mz={mz}, 1/K0={:.4}+{:.4e}*scan)",
-            self.inner.im_intercept, self.inner.im_slope,
-        )
+        let im = match self.inner.mobility_conversion() {
+            MobilityConversion::AcquisitionRange {
+                intercept, slope, ..
+            } => format!("{intercept:.4}+{slope:.4e}*scan"),
+            other => format!("{other:?}"),
+        };
+        format!("Calibration(mz={mz}, 1/K0={im})")
     }
 }
 
@@ -640,7 +696,7 @@ impl Reader {
             return Ok(cal);
         }
         let cal = inner.bundle_calibration().map_err(to_py_err)?;
-        if let Some(reason) = &cal.status.fallback_reason {
+        if let Some(reason) = &cal.status().fallback_reason {
             Python::attach(|py| {
                 let msg = std::ffi::CString::new(format!(
                     "{}: m/z uses the acquisition-range fallback model, which can be off by \
@@ -680,7 +736,10 @@ impl Reader {
         let mut source = ::opentimstdf::mzml::TdfSource::new(&guard, name).map_err(to_py_err)?;
         source
             .iter_chromatograms()
-            .map(|rec| json_object(py, &rec))
+            .map(|rec| {
+                let rec = rec.map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                json_object(py, &rec)
+            })
             .collect()
     }
 
@@ -692,7 +751,12 @@ impl Reader {
         std::thread::spawn(move || {
             let mut source = source;
             for record in source.iter_spectra() {
-                if sender.send(Some(record)).is_err() {
+                let failed = record.is_err();
+                if sender
+                    .send(Some(record.map_err(|e| e.to_string())))
+                    .is_err()
+                    || failed
+                {
                     return;
                 }
             }
@@ -733,7 +797,7 @@ impl Reader {
     /// `decode_spectrum` converts each frame with its own row.
     fn calibration(&self) -> PyResult<Calibration> {
         let guard = self.locked_inner()?;
-        let inner = *self.cached_calibration(&guard)?.primary();
+        let inner = self.cached_calibration(&guard)?.primary().clone();
         Ok(Calibration { inner })
     }
 
@@ -741,7 +805,7 @@ impl Reader {
     /// `"range_fallback"`.
     fn mz_calibration_model(&self) -> PyResult<&'static str> {
         let guard = self.locked_inner()?;
-        Ok(self.cached_calibration(&guard)?.status.model.as_str())
+        Ok(self.cached_calibration(&guard)?.status().model.as_str())
     }
 
     /// Why the calibration tables could not be used, or `None` when they are.
@@ -749,7 +813,7 @@ impl Reader {
         let guard = self.locked_inner()?;
         Ok(self
             .cached_calibration(&guard)?
-            .status
+            .status()
             .fallback_reason
             .clone())
     }
@@ -769,23 +833,9 @@ impl Reader {
     }
 
     fn decode_peaks(&self, frame: &Frame) -> PyResult<Vec<Peak>> {
-        let rs_frame = RsFrame {
-            id: frame.id,
-            time: frame.time,
-            num_scans: frame.num_scans,
-            num_peaks: frame.num_peaks,
-            tims_id: frame.tims_id,
-            polarity: frame.polarity_symbol.clone(),
-            scan_mode: frame.scan_mode,
-            msms_type: frame.msms_type,
-            mz_calibration_id: frame.mz_calibration_id,
-            accumulation_time: frame.accumulation_time,
-            summed_intensities: frame.summed_intensities,
-            max_intensity: frame.max_intensity,
-        };
         Ok(self
             .locked_inner()?
-            .decode_peaks(&rs_frame)
+            .decode_peaks(&frame.inner)
             .map_err(to_py_err)?
             .into_iter()
             .map(Into::into)
@@ -801,22 +851,8 @@ impl Reader {
     fn decode_spectrum(&self, py: Python<'_>, frame: &Frame) -> PyResult<DecodedSpectrum> {
         let guard = self.locked_inner()?;
         let bundle_cal = self.cached_calibration(&guard)?;
-        let rs_frame = RsFrame {
-            id: frame.id,
-            time: frame.time,
-            num_scans: frame.num_scans,
-            num_peaks: frame.num_peaks,
-            tims_id: frame.tims_id,
-            polarity: frame.polarity_symbol.clone(),
-            scan_mode: frame.scan_mode,
-            msms_type: frame.msms_type,
-            mz_calibration_id: frame.mz_calibration_id,
-            accumulation_time: frame.accumulation_time,
-            summed_intensities: frame.summed_intensities,
-            max_intensity: frame.max_intensity,
-        };
-        let cal = bundle_cal.for_frame(&rs_frame);
-        let peaks = guard.decode_peaks(&rs_frame).map_err(to_py_err)?;
+        let cal = bundle_cal.for_frame(&frame.inner);
+        let peaks = guard.decode_peaks(&frame.inner).map_err(to_py_err)?;
         let n = peaks.len();
         let mut mz = Vec::with_capacity(n);
         let mut inv_mobility = Vec::with_capacity(n);

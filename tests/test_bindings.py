@@ -39,7 +39,13 @@ def test_canonical_records():
     assert len(record["mz"]) == len(record["intensity"])
     assert "opentimstdf.frame_id" in record["extra"]
     assert record["scan_number"] >= 1
-    assert reader.frames()[0].polarity_symbol in {"+", "-"}
+    frame = reader.frames()[0]
+    assert frame.polarity_symbol in {"+", "-"}
+    assert frame.polarity in {"positive", "negative"}
+    assert frame.id >= 1 and frame.num_scans > 0
+    assert isinstance(calib.im_intercept, float) and calib.im_slope < 0
+    spectrum = reader.decode_spectrum(frame)
+    assert len(spectrum) == len(reader.decode_peaks(frame)) == frame.num_peaks
 
     for chrom in reader.read_chromatograms():
         assert len(chrom["time_sec"]) == len(chrom["intensity"])

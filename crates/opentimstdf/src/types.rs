@@ -1,5 +1,11 @@
+//! Plain data types read from a bundle.
+//!
+//! The structs are `#[non_exhaustive]`: fields stay public for reading, and
+//! new fields may be added in minor releases. Values come from [`crate::Reader`].
+
 /// Descriptor for a single frame (mirrors the `Frames` SQLite row we need).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Frame {
     pub id: u32,
     /// Retention time (seconds).
@@ -27,14 +33,29 @@ pub struct Frame {
 
 /// One decoded peak.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct Peak {
+    /// Mobility scan index within the frame (0-based).
     pub scan: u32,
+    /// TOF index.
     pub tof: u32,
+    /// Raw intensity count.
     pub intensity: u32,
+}
+
+impl Peak {
+    pub fn new(scan: u32, tof: u32, intensity: u32) -> Self {
+        Self {
+            scan,
+            tof,
+            intensity,
+        }
+    }
 }
 
 /// Bundle-level metadata from `GlobalMetadata`.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Metadata {
     pub schema_version_major: u32,
     pub schema_version_minor: u32,
@@ -49,6 +70,7 @@ pub struct Metadata {
 
 /// One isolation window within a diaPASEF window group (SPEC §8.1).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct DiaWindow {
     pub window_group: u32,
     pub scan_num_begin: u32,
@@ -60,6 +82,7 @@ pub struct DiaWindow {
 
 /// All diaPASEF isolation windows for a single MS2 frame.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct DiaFrameWindows {
     pub frame_id: u32,
     pub window_group: u32,
@@ -68,6 +91,7 @@ pub struct DiaFrameWindows {
 
 /// One PASEF DDA MS2 scan range within a frame (SPEC §8.2).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PasefMsMsInfo {
     pub frame_id: u32,
     pub scan_num_begin: u32,
@@ -80,6 +104,7 @@ pub struct PasefMsMsInfo {
 
 /// One prm-PASEF MS2 scan range within a frame (SPEC §8.3).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PrmMsMsInfo {
     pub frame_id: u32,
     pub scan_num_begin: u32,
@@ -93,6 +118,7 @@ pub struct PrmMsMsInfo {
 
 /// One scheduled PRM target from the `PrmTargets` table (SPEC §8.3).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PrmTarget {
     pub id: u32,
     /// User-supplied target label (e.g. peptide name or compound ID).
@@ -108,6 +134,7 @@ pub struct PrmTarget {
 
 /// One PASEF DDA precursor (SPEC §8.2).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Precursor {
     pub id: u32,
     pub largest_peak_mz: f64,

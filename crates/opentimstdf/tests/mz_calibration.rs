@@ -201,11 +201,11 @@ fn mz_calibration_matches_precursor_peaks() {
     }
     let r = Reader::open(&dir).expect("open");
     let bundle_cal = r.bundle_calibration().expect("calibration");
-    if bundle_cal.status.model != MzCalibrationModel::Tables {
+    if bundle_cal.status().model != MzCalibrationModel::Tables {
         eprintln!(
             "skipping: {} uses the range fallback ({:?})",
             dir.display(),
-            bundle_cal.status.fallback_reason
+            bundle_cal.status().fallback_reason
         );
         return;
     }
@@ -218,7 +218,7 @@ fn mz_calibration_matches_precursor_peaks() {
         if current.as_ref().map(|c| c.0) != Some(p.parent) {
             let frame = r.frame(p.parent).expect("parent frame");
             let peaks = r.decode_peaks(&frame).expect("decode parent frame");
-            current = Some((p.parent, peaks, *bundle_cal.for_frame(&frame)));
+            current = Some((p.parent, peaks, bundle_cal.for_frame(&frame)));
         }
         let Some((_, peaks, cal)) = current.as_ref() else {
             continue;
