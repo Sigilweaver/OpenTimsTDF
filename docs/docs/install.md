@@ -66,5 +66,8 @@ Python:
 python -c "import opentimstdf; print(opentimstdf.__version__)"
 ```
 
-Corpus-gated tests that need local `.d/` bundles skip silently when
-no sample data is present.
+Corpus-gated tests that need local `.d/` bundles print a skip message
+and pass when no sample data is present. Set `OPENTIMSTDF_TEST_BUNDLE`
+to a bundle and `REQUIRE_CORPUS=1` to make a missing bundle a failure
+(`REQUIRE_CORPUS=all` also requires the PRIDE bundles under
+`OPENTIMSTDF_TEST_CACHE`).

@@ -24,8 +24,9 @@
 //!   [`MzCalibrationStatus::fallback_reason`]. Linear in `sqrt(mz)` between
 //!   `GlobalMetadata.MzAcqRangeLower` and `MzAcqRangeUpper` over
 //!   `DigitizerNumSamples` (the `opentims` open-source model,
-//!   `tof2mz_converter.cpp`, MIT). It ignores the digitizer delay and can
-//!   be off by hundreds of ppm.
+//!   `tof2mz_converter.cpp`, MIT). It ignores the digitizer delay and its
+//!   median error was 2 to about 200 ppm on the tested bundles (14 to 31
+//!   ppm on PXD035173, which has no usable table).
 //!
 //! Neither model applies a temperature correction (`MzCalibration.T1`,
 //! `T2`, `dC1`, `dC2` and the per-frame `Frames.T1`, `Frames.T2` are not

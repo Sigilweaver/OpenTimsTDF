@@ -30,9 +30,10 @@ const MAX_PRECURSORS: usize = 2000;
 /// bundle), 0.83 ppm (PXD027359 DDA), 0.86 ppm (PXD080079, timsTOF HT), and
 /// 3.15 ppm on one third-party test fixture. A single TOF index of error
 /// adds 4 to 9 ppm at 0.2 ns/index, and using the wrong `MzCalibration` row
-/// or the range model adds tens to hundreds of ppm on most bundles, so 4 ppm
-/// separates a working model from those failures while tolerating the
-/// largest offset seen.
+/// adds 500 ppm or more, so 4 ppm separates a working model from those
+/// failures while tolerating the largest offset seen. (The range model can
+/// come within 2 ppm on some bundles; `mz_calibration_status_is_reported`
+/// checks which model is in use.)
 const MAX_MEDIAN_ABS_PPM: f64 = 4.0;
 
 struct PrecursorRow {

@@ -699,8 +699,8 @@ impl Reader {
         if let Some(reason) = &cal.status().fallback_reason {
             Python::attach(|py| {
                 let msg = std::ffi::CString::new(format!(
-                    "{}: m/z uses the acquisition-range fallback model, which can be off by \
-                     hundreds of ppm: {reason}",
+                    "{}: m/z uses the acquisition-range fallback model, which is less \
+                     accurate (2 to about 200 ppm median error on tested bundles): {reason}",
                     self.bundle_dir.display()
                 ))
                 .unwrap_or_default();
