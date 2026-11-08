@@ -27,7 +27,7 @@
     "@docusaurus/tsconfig": "^3.10.2",
     "@docusaurus/types": "^3.10.2",
     "typescript": "~7.0.2",
-    "ws": "^8.22.0"
+    "ws": "^8.22.1"
   },
   "browserslist": {
     "production": [
