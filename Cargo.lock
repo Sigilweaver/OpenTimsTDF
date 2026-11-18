@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "opentimstdf"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "log",
  "openmassspec-core",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "opentimstdf-py"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "numpy",
  "openmassspec-core",

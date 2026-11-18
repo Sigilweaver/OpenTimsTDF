@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-18
+
+Dependency update. No public API change.
+
+### Fixed
+
+- Updates `rusqlite` to 0.42 (bundled SQLite via `libsqlite3-sys` 0.40),
+  which clears RUSTSEC-2026-0459 in `libsqlite3-sys` for downstream
+  `cargo audit`. `rusqlite` is not part of the public API.
+- Updates `zstd` to 0.14.3 and `log` to 0.4.35.
+
 ## [3.0.0] - 2026-10-11
 
 After this release, new fields, enum variants, calibration
