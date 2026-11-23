@@ -34,6 +34,9 @@ reader = opentimstdf.Reader("run.d")
 | `prm_msms_info_for_frame(frame_id)` | `list[PrmMsMsInfo]` | PRM target selections for an MS2 frame |
 | `prm_target(target_id)` | `PrmTarget \| None` | A single PRM target definition by id |
 | `precursor(precursor_id)` | `Precursor \| None` | A single DDA precursor by id |
+| `run_info()` | `dict` | Canonical run metadata (instrument, software, `extra` map) |
+| `iter_records()` | iterator of `dict` | Canonical spectrum records, one frame decoded at a time |
+| `read_chromatograms()` | `list[dict]` | Canonical TIC, BPC and scheduled PRM chromatograms |
 
 ```python
 frame = reader.frame(1)
@@ -50,6 +53,28 @@ spectrum.intensity      # numpy.ndarray, dtype=uint32
 work; `decode_spectrum` additionally applies calibration in the same pass,
 so prefer it over pairing `decode_peaks` with manual `Calibration` calls
 when you need m/z and inverse mobility rather than raw scan/tof.
+
+## Canonical records
+
+`iter_records()` yields one dict per spectrum, in the shape every OpenMassSpec
+reader uses. Peak arrays (`mz`, `intensity`, `inv_mobility_per_peak`) are
+Python lists or `None`; everything else is plain Python values.
+
+| Key | Value |
+| --- | --- |
+| `native_id`, `index`, `scan_number` | spectrum identity (`frame=F scan=A-B`) |
+| `ms_level` | `1` for MS1 frames, `2` for PASEF and diaPASEF spectra |
+| `retention_time_sec` | `float`, the frame time in seconds |
+| `polarity`, `scan_mode`, `analyzer` | Core labels: `"positive"`/`"negative"`, `"centroid"`, `"tof"` |
+| `precursor` | `None` for MS1, else a dict (below) |
+| `warnings` | list of `{kind, message}`; present only when non-empty. `opentimstdf.empty_spectrum` marks a spectrum with no decoded peaks |
+| `extra` | `opentimstdf.*` frame fields as strings |
+
+`precursor` carries `target_mz`, `selected_mz`, `isolation_width`, `charge`,
+`intensity`, `precursor_native_id`, `activation` (`"hcd"`), `analyzer`, and
+`collision_energies`, a list of `{"value": float, "unit": "ev"}`. The TDF
+tables store one collision energy per PASEF precursor or diaPASEF window, in
+eV, so the list has one entry.
 
 ## Supporting classes
 
@@ -135,7 +160,7 @@ in its `windows` list.
 | `scan_num_end` | `int` |
 | `isolation_mz` | `float` |
 | `isolation_width` | `float` |
-| `collision_energy` | `float` |
+| `collision_energy` | `float` (eV) |
 
 ### PasefMsMsInfo
 
@@ -146,7 +171,7 @@ in its `windows` list.
 | `scan_num_end` | `int` |
 | `isolation_mz` | `float` |
 | `isolation_width` | `float` |
-| `collision_energy` | `float` |
+| `collision_energy` | `float` (eV) |
 | `precursor_id` | `int` (pass to `Reader.precursor()`) |
 
 ### PrmMsMsInfo / PrmTarget
@@ -164,7 +189,7 @@ in its `windows` list.
 | `scan_num_end` | `int` |
 | `isolation_mz` | `float` |
 | `isolation_width` | `float` |
-| `collision_energy` | `float` |
+| `collision_energy` | `float` (eV) |
 | `target_id` | `int` (pass to `Reader.prm_target()`) |
 
 **PrmTarget**

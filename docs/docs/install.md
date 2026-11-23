@@ -42,7 +42,8 @@ pip install opentimstdf
 ```
 
 Built with [PyO3](https://pyo3.rs) and [maturin](https://www.maturin.rs);
-wheels target Python 3.9+.
+wheels target Python 3.10+ (one abi3 wheel per platform;
+see [SUPPORT.md](https://github.com/Sigilweaver/ops/blob/main/SUPPORT.md)).
 
 From source (requires a working Rust toolchain and `maturin`):
 

@@ -10,4 +10,5 @@ they are never out of date here:
 
 - [CHANGELOG.md on GitHub](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/CHANGELOG.md)
 - [Releases](https://github.com/Sigilweaver/OpenTimsTDF/releases)
+- [Migrating to 4.0](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/MIGRATING-4.0.md)
 - [Migrating to 3.0](https://github.com/Sigilweaver/OpenTimsTDF/blob/main/MIGRATING-3.0.md)

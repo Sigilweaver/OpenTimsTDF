@@ -107,6 +107,27 @@ full quickstart, guide, and format specification.
 - **PRM-PASEF frames are not converted to spectra.** `MsMsType = 10`
   frames are skipped by `iter_spectra` and mzML; they feed only the SRM
   chromatograms. The corpus has PRM-PASEF metadata but no frame data.
+- **Collision energy is one value in eV per spectrum.** `PasefFrameMsMsInfo`
+  and `DiaFrameMsMsWindows` carry the collision energy without a unit column.
+  The bundle's own `PropertyDefinitions` table gives `eV` as the dimension of
+  every collision-energy setting, and the stored values fall inside the
+  acquisition's collision-energy ramp, so records state `ev`.
+  `CollisionEnergySweepingInfo` (stepped sweeps) is not read; no public bundle
+  has rows in it.
+- **A PASEF spectrum whose parent MS1 frame is not written is rejected.**
+  `Precursors.Parent` names the MS1 frame a precursor was selected from, and
+  the record's `spectrumRef` points at that frame's spectrum. When that frame
+  is not in the output (it failed to decode while the writer skips bad records,
+  or `Parent` names no MS1 frame), Core's mzML writer reports a dangling
+  precursor reference. Check name `dangling_precursor_ref`:
+  `WriteOptions::with_leniency` with `Check::DanglingPrecursorRef` writes the
+  spectrum without the reference and adds a warning.
+- **Spectra with no peaks are written empty and flagged.** A mobility range
+  or frame with no decoded peaks (664 of 23,293 MS2 spectra in the CI bundle)
+  carries the warning `opentimstdf.empty_spectrum`.
+- **No `scanWindowList` in mzML.** The bundle's `MzAcqRangeLower` and
+  `MzAcqRangeUpper` give the acquisition m/z range, which is not mapped to a
+  per-spectrum scan window.
 - **Only TDF bundles are read.** TSF bundles (TIMS off, MALDI) and BAF
   bundles are not supported.
 - **Tested data:** timsTOF Pro, Pro 2 and SCP, DDA-PASEF and diaPASEF,
