@@ -56,51 +56,28 @@ fn json_object<T: serde::Serialize>(py: Python<'_>, value: &T) -> PyResult<Py<Py
     Ok(py.import("json")?.call_method1("loads", (json,))?.unbind())
 }
 
+/// Fill the dict keys the Python surface adds to Core's serde output: an
+/// `extra` map on records and run metadata, and the vendor-reported
+/// `reported_*` copies of the summary values. Enum labels (`polarity`,
+/// `scan_mode`, `analyzer`, `activation`, `mobility_array_kind`, collision
+/// energy `unit`) are Core's own `as_str` labels and are passed through.
 fn normalize_record_json(value: &mut serde_json::Value) {
-    if let serde_json::Value::Object(fields) = value {
-        if fields.contains_key("native_id") || fields.contains_key("source_file_name") {
-            fields
-                .entry("extra")
-                .or_insert_with(|| serde_json::json!({}));
-        }
-        if fields.contains_key("native_id") {
-            for (source, alias) in [
-                ("total_ion_current", "reported_total_ion_current"),
-                ("base_peak_mz", "reported_base_peak_mz"),
-                ("base_peak_intensity", "reported_base_peak_intensity"),
-            ] {
-                if let Some(reported) = fields.get(source).cloned() {
-                    fields.insert(alias.to_string(), reported);
-                }
-            }
-        }
-        for (key, field) in fields {
-            match key.as_str() {
-                "polarity" | "scan_mode" | "analyzer" | "activation" => {
-                    if let Some(text) = field.as_str() {
-                        *field = serde_json::Value::String(text.to_ascii_lowercase());
-                    }
-                }
-                "mobility_array_kind" => {
-                    if let Some(text) = field.as_str() {
-                        let normalized = match text {
-                            "InverseReducedVsPerCm2" => "inverse_reduced_k0",
-                            "DriftTimeMilliseconds" => "drift_time_ms",
-                            other => other,
-                        };
-                        *field = serde_json::Value::String(normalized.to_string());
-                    }
-                }
-                "analyzers" => {
-                    if let Some(items) = field.as_array_mut() {
-                        for item in items {
-                            if let Some(text) = item.as_str() {
-                                *item = serde_json::Value::String(text.to_ascii_lowercase());
-                            }
-                        }
-                    }
-                }
-                _ => normalize_record_json(field),
+    let serde_json::Value::Object(fields) = value else {
+        return;
+    };
+    if fields.contains_key("native_id") || fields.contains_key("source_file_name") {
+        fields
+            .entry("extra")
+            .or_insert_with(|| serde_json::json!({}));
+    }
+    if fields.contains_key("native_id") {
+        for (source, alias) in [
+            ("total_ion_current", "reported_total_ion_current"),
+            ("base_peak_mz", "reported_base_peak_mz"),
+            ("base_peak_intensity", "reported_base_peak_intensity"),
+        ] {
+            if let Some(reported) = fields.get(source).cloned() {
+                fields.insert(alias.to_string(), reported);
             }
         }
     }

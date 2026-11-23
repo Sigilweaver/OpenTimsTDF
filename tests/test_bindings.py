@@ -10,12 +10,17 @@ import opentimstdf
 import pytest
 
 
-def test_canonical_records():
+def _corpus_bundle() -> Path:
     path = Path(os.environ.get("OPENTIMSTDF_TEST_BUNDLE", "corpus/NQO1-F107C_coi-N2-P_200-0C_3996.d"))
     if not path.is_dir():
         if os.environ.get("REQUIRE_CORPUS", "").strip() in {"1", "true", "all"}:
             pytest.fail(f"REQUIRE_CORPUS is set but {path} is not a TDF bundle")
         pytest.skip("set OPENTIMSTDF_TEST_BUNDLE to a TDF bundle")
+    return path
+
+
+def test_canonical_records():
+    path = _corpus_bundle()
 
     reader = opentimstdf.Reader(str(path))
     run = reader.run_info()
@@ -50,6 +55,50 @@ def test_canonical_records():
 
     for chrom in reader.read_chromatograms():
         assert len(chrom["time_sec"]) == len(chrom["intensity"])
+
+
+def test_ms2_record_keys():
+    """The Core 4 record dict on a real PASEF MS2 record."""
+    reader = opentimstdf.Reader(str(_corpus_bundle()))
+    run = reader.run_info()
+    assert run["mobility_array_kind"] == "inverse_reduced_k0"
+
+    records = reader.iter_records()
+    ms1 = next(records)
+    assert ms1["ms_level"] == 1 and ms1["precursor"] is None
+    ms2 = next(r for r in records if r["ms_level"] == 2)
+
+    # Collision energy is a list of {value, unit}; the Core 3 keys are gone.
+    assert "collision_energy" not in ms2["precursor"]
+    assert "ce_is_nce" not in ms2["precursor"]
+    energies = ms2["precursor"]["collision_energies"]
+    assert len(energies) == 1
+    assert energies[0]["unit"] == "ev"
+    assert 0.0 < energies[0]["value"] < 200.0
+
+    # Labels are Core's own, retention time is a float on a decoded frame.
+    assert ms2["analyzer"] == ms2["precursor"]["analyzer"] == "tof"
+    assert ms2["scan_mode"] == "centroid"
+    assert ms2["precursor"]["activation"] == "hcd"
+    assert ms2["polarity"] == "positive"
+    assert isinstance(ms2["retention_time_sec"], float)
+    assert ms2["precursor"]["selected_mz"] > 0
+    assert ms2["precursor"]["precursor_native_id"].startswith("frame=")
+    assert len(ms2["mz"]) == len(ms2["intensity"])
+    assert "warnings" not in ms2
+
+
+def test_empty_spectrum_warning():
+    """A PASEF range with no decoded peaks is flagged, not silently empty."""
+    path = _corpus_bundle()
+    if path.name != "NQO1-F107C_coi-N2-P_200-0C_3996.d":
+        pytest.skip("empty-spectrum position is known only for the CI bundle")
+    reader = opentimstdf.Reader(str(path))
+    # Frame 20, scan 502-527 is the first PASEF range with no peaks.
+    empty = next(r for r in reader.iter_records() if r["native_id"] == "frame=20 scan=502-527")
+    assert len(empty["mz"]) == 0
+    assert empty["base_peak_mz"] is None and empty["low_mz"] is None
+    assert [w["kind"] for w in empty["warnings"]] == ["opentimstdf.empty_spectrum"]
 
 
 def _empty_bin_bundle(root: Path) -> Path:
