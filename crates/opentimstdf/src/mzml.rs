@@ -30,6 +30,12 @@
 //!   `DiaWindow` in the frame, with the isolation window taken from the
 //!   `DiaFrameMsMsWindows` table. Native ID: `frame=F scan=A-B`.
 //!
+//! Every spectrum is centroid (the frame payload is a list of discrete peaks)
+//! and every precursor collision energy is in eV (see
+//! `COLLISION_ENERGY_UNIT`), so Core's strict writer checks for an unknown
+//! scan mode or collision-energy unit never fire. A spectrum with no decoded
+//! peaks carries the warning [`EMPTY_SPECTRUM_CODE`].
+//!
 //! `scan_number` is a monotonic 1-based counter across the whole bundle
 //! (PASEF frames produce many spectra per frame, so frame ID alone is not
 //! unique).
@@ -52,6 +58,18 @@ use crate::{
     BundleCalibration, Calibration, DiaWindow, Frame, Metadata, MzCalibrationStatus, PasefMsMsInfo,
     Peak, Precursor as TdfPrecursor, PrmTarget, Reader,
 };
+
+/// Unit of `PasefFrameMsMsInfo.CollisionEnergy` and
+/// `DiaFrameMsMsWindows.CollisionEnergy`. The tables carry no unit column.
+/// The unit is eV: the bundle's own `PropertyDefinitions` table gives `eV`
+/// as the dimension of every collision-energy setting (for example
+/// `Collision_Energy_Act` and `Energy_Ramping_Collision_Energy_StartEnd`), and
+/// the stored values fall inside that ramp (20 to 59 eV in the CI bundle).
+/// See `docs/docs/format/05-instrument-tables.md`.
+const COLLISION_ENERGY_UNIT: msc::CollisionEnergyUnit = msc::CollisionEnergyUnit::Ev;
+
+/// [`msc::Warning`] code on a spectrum that has no peaks.
+pub const EMPTY_SPECTRUM_CODE: &str = "opentimstdf.empty_spectrum";
 
 const SOFTWARE_NAME: &str = "opentimstdf";
 const SOFTWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -157,10 +175,10 @@ struct PeakArrays {
     intensity: Vec<f32>,
     inv_mobility_per_peak: Option<Vec<f32>>,
     tic: f64,
-    base_peak_mz: f64,
-    base_peak_intensity: f64,
-    low_mz: f64,
-    high_mz: f64,
+    base_peak_mz: Option<f64>,
+    base_peak_intensity: Option<f64>,
+    low_mz: Option<f64>,
+    high_mz: Option<f64>,
     inv_mobility: Option<f64>,
 }
 
@@ -188,7 +206,7 @@ fn materialize_peaks(
     if filtered.is_empty() {
         return None;
     }
-    filtered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    filtered.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let mut mz = Vec::with_capacity(filtered.len());
     let mut intensity = Vec::with_capacity(filtered.len());
@@ -211,16 +229,16 @@ fn materialize_peaks(
     let mean_scan = scan_sum as f64 / filtered.len() as f64;
     let inv_mob = cal.scan_to_inv_mobility(mean_scan.round() as u32);
 
-    let low_mz = filtered.first().map(|t| t.0).unwrap_or(0.0);
-    let high_mz = filtered.last().map(|t| t.0).unwrap_or(0.0);
+    let low_mz = filtered.first().map(|t| t.0);
+    let high_mz = filtered.last().map(|t| t.0);
 
     Some(PeakArrays {
         mz,
         intensity,
         inv_mobility_per_peak: Some(inv_mobility_per_peak),
         tic,
-        base_peak_mz: bp_mz,
-        base_peak_intensity: bp_int as f64,
+        base_peak_mz: Some(bp_mz),
+        base_peak_intensity: Some(bp_int as f64),
         low_mz,
         high_mz,
         inv_mobility: Some(inv_mob),
@@ -235,7 +253,8 @@ fn base_record(
     frame: &Frame,
     pa: PeakArrays,
 ) -> msc::SpectrumRecord {
-    msc::SpectrumRecord::new(
+    let empty = pa.mz.is_empty();
+    let record = msc::SpectrumRecord::new(
         (scan_number as usize).saturating_sub(1),
         scan_number,
         native_id,
@@ -254,7 +273,18 @@ fn base_record(
     .with_inv_mobility(pa.inv_mobility)
     // Bruker timsTOF has no FAIMS interface, so `faims_cv` stays `None`.
     .with_peaks(pa.mz, pa.intensity)
-    .with_inv_mobility_per_peak(pa.inv_mobility_per_peak)
+    .with_inv_mobility_per_peak(pa.inv_mobility_per_peak);
+    // A spectrum with no decoded peaks is real data (nothing in range), not a
+    // decode failure, but it is flagged so a consumer can tell it from a
+    // spectrum that lost its peaks.
+    if empty {
+        record.with_warning(msc::Warning::other(
+            EMPTY_SPECTRUM_CODE,
+            "no peaks decoded in this spectrum's frame or mobility scan range",
+        ))
+    } else {
+        record
+    }
 }
 
 impl PeakArrays {
@@ -265,10 +295,10 @@ impl PeakArrays {
             intensity: Vec::new(),
             inv_mobility_per_peak: None,
             tic: 0.0,
-            base_peak_mz: 0.0,
-            base_peak_intensity: 0.0,
-            low_mz: 0.0,
-            high_mz: 0.0,
+            base_peak_mz: None,
+            base_peak_intensity: None,
+            low_mz: None,
+            high_mz: None,
             inv_mobility: None,
         }
     }
@@ -314,8 +344,7 @@ fn build_pasef_ms2(
         .with_isolation_width(info.isolation_width)
         .with_charge(tdf_prec.and_then(|p| p.charge).map(|c| c as i32))
         .with_intensity(tdf_prec.map(|p| p.intensity))
-        .with_collision_energy(info.collision_energy)
-        .with_ce_is_nce(false)
+        .with_collision_energy(info.collision_energy, Some(COLLISION_ENERGY_UNIT))
         // Same native-ID format used for the MS1 spectrum (`build_ms1`,
         // above), so mzML `spectrumRef` lookups round-trip: the MS1 frame
         // this precursor was selected from is `parent_frame_id`, and every
@@ -358,8 +387,7 @@ fn build_dia_ms2(
     let precursor = msc::PrecursorInfo::default()
         .with_target_mz(window.isolation_mz)
         .with_isolation_width(window.isolation_width)
-        .with_collision_energy(window.collision_energy)
-        .with_ce_is_nce(false)
+        .with_collision_energy(window.collision_energy, Some(COLLISION_ENERGY_UNIT))
         .with_activation(msc::Activation::HCD)
         .with_analyzer(msc::Analyzer::TOFMS);
     // CCS derivation from inv_mobility is tracked separately, #14.
@@ -1021,6 +1049,25 @@ mod tests {
     }
 
     #[test]
+    fn spectrum_without_peaks_carries_the_empty_spectrum_warning() {
+        let cal = sample_calibration();
+        let frame = sample_frame(0);
+        let peaks = [Peak {
+            scan: 1,
+            tof: 100,
+            intensity: 10,
+        }];
+        let empty = build_ms1(1, &frame, &[], &cal);
+        assert_eq!(empty.warnings.len(), 1);
+        assert_eq!(
+            empty.warnings[0].kind,
+            msc::WarningKind::Other(EMPTY_SPECTRUM_CODE.into())
+        );
+        let full = build_ms1(2, &frame, &peaks, &cal);
+        assert!(full.warnings.is_empty());
+    }
+
+    #[test]
     fn build_pasef_ms2_wires_up_precursor_native_id_from_parent_frame() {
         let cal = sample_calibration();
         let frame = sample_frame(8);
@@ -1050,6 +1097,15 @@ mod tests {
         };
 
         let rec = build_pasef_ms2(1, &frame, &info, Some(&prec), &peaks, &cal);
+        rec.validate()
+            .expect("PASEF MS2 record passes Core validation");
+        assert_eq!(
+            rec.precursor.as_ref().unwrap().collision_energies,
+            vec![msc::CollisionEnergy::new(
+                20.0,
+                msc::CollisionEnergyUnit::Ev
+            )]
+        );
         assert_eq!(
             rec.precursor
                 .as_ref()
@@ -1108,7 +1164,16 @@ mod tests {
         };
 
         let rec = build_dia_ms2(1, &frame, &window, &peaks, &cal);
+        rec.validate()
+            .expect("diaPASEF MS2 record passes Core validation");
         let prec = rec.precursor.as_ref().unwrap();
+        assert_eq!(
+            prec.collision_energies,
+            vec![msc::CollisionEnergy::new(
+                20.0,
+                msc::CollisionEnergyUnit::Ev
+            )]
+        );
         assert_eq!(prec.precursor_native_id, None);
         // DIA: isolation window only, no selected ion.
         assert_eq!(prec.selected_mz, None);
