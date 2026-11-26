@@ -106,7 +106,14 @@ full quickstart, guide, and format specification.
   incomplete upload) fails on its first frame.
 - **PRM-PASEF frames are not converted to spectra.** `MsMsType = 10`
   frames are skipped by `iter_spectra` and mzML; they feed only the SRM
-  chromatograms. The corpus has PRM-PASEF metadata but no frame data.
+  chromatograms. The corpus has PRM-PASEF metadata but no frame data. The
+  frames are counted: the run carries the warning
+  `opentimstdf.frames_not_projected` with the count (and
+  `TdfSource::projection_gaps()` returns it), and the warning
+  `opentimstdf.prm_chromatogram_gaps` counts prm-PASEF frames with no
+  `PrmFrameMsMsInfo` row and targets with no `PrmTargets` row. The same
+  warning counts diaPASEF frames with no window group and PASEF frames with
+  no `PasefFrameMsMsInfo` row. See #13.
 - **Collision energy is one value in eV per spectrum.** `PasefFrameMsMsInfo`
   and `DiaFrameMsMsWindows` carry the collision energy without a unit column.
   The bundle's own `PropertyDefinitions` table gives `eV` as the dimension of
@@ -124,10 +131,13 @@ full quickstart, guide, and format specification.
   spectrum without the reference and adds a warning.
 - **Spectra with no peaks are written empty and flagged.** A mobility range
   or frame with no decoded peaks (664 of 23,293 MS2 spectra in the CI bundle)
-  carries the warning `opentimstdf.empty_spectrum`.
-- **No `scanWindowList` in mzML.** The bundle's `MzAcqRangeLower` and
-  `MzAcqRangeUpper` give the acquisition m/z range, which is not mapped to a
-  per-spectrum scan window.
+  carries Core's warning `empty_spectrum`, and declares no base peak or m/z
+  range.
+- **The scan window is the stated acquisition range.** Every spectrum's
+  `scanWindowList` holds `MzAcqRangeLower` to `MzAcqRangeUpper` from the
+  bundle's `GlobalMetadata`, as stored. Peaks in bundles recorded by
+  `Bruker otofControl` can lie up to about 5 m/z outside it (5,086 of 24,425
+  spectra in the CI bundle). A bundle without the keys has no scan window.
 - **Only TDF bundles are read.** TSF bundles (TIMS off, MALDI) and BAF
   bundles are not supported.
 - **Tested data:** timsTOF Pro, Pro 2 and SCP, DDA-PASEF and diaPASEF,

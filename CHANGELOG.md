@@ -22,7 +22,8 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
   `unit == "ev"`, in place of `collision_energy` and `ce_is_nce`.
   `analyzer` (on the record and on the precursor) is `"tof"`, where it was
   `"tofms"`. `warnings` is present on a spectrum that has any. The
-  `scan_window` key is not emitted; see the mzML change below.
+  `scan_window` key is `scan_windows`, a list of `{lower, upper}`; see the
+  mzML change below.
 - The mzML writer in Core 4 applies strict checks to every spectrum: an
   unknown scan mode, a collision energy with no unit, an unsorted or NaN
   m/z array, MS level 0 and a precursor `spectrumRef` that names a spectrum
@@ -32,9 +33,16 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
   converts with 4.0. A parent MS1 frame that is not written still makes
   its PASEF spectra a dangling reference (`dangling_precursor_ref`); see
   Known issues in the README.
-- mzML output no longer carries a `<scanWindowList>`: Core 3 wrote the
-  observed m/z range of each spectrum there, which is not the instrument's
-  scan window.
+- mzML `<scanWindowList>` holds the bundle's stated m/z acquisition range
+  (`GlobalMetadata.MzAcqRangeLower` and `MzAcqRangeUpper`, as stored) on
+  every spectrum. Core 3 wrote the observed m/z range of each spectrum
+  there, which is not the instrument's scan window. Core 4 writes it only
+  from `SpectrumRecord::scan_windows`. On the three public bundles it is
+  300 to 1600 m/z (DDA-PASEF) and 99.992696 to 1700 (diaPASEF); on bundles
+  recorded by `Bruker otofControl`, peaks of some spectra lie up to about 5
+  m/z outside it (5,086 of 24,425 spectra in the CI bundle). A bundle with
+  no such keys, or values that are not a range, gets no scan window and the
+  run `extra` key `opentimstdf.scan_window_unavailable` names why.
 - `PasefMsMsInfo`, `DiaWindow` and `PrmMsMsInfo` `collision_energy` values
   are documented as eV (the bundle's `PropertyDefinitions` table gives `eV`
   as the dimension of every collision-energy setting).
@@ -49,11 +57,22 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
 ### Added
 
 - A spectrum with no decoded peaks (a PASEF or diaPASEF mobility range with
-  no peaks, or an MS1 frame with none) carries the Core warning
-  `opentimstdf.empty_spectrum` (`opentimstdf::mzml::EMPTY_SPECTRUM_CODE`).
-  It is written to mzML as a user parameter and counted in
-  `WriteSummary::warning_counts`. 664 of the 23,293 MS2 spectra in the CI
-  bundle have it.
+  no peaks, or an MS1 frame with none) carries Core's `empty_spectrum`
+  warning (`WarningKind::EmptySpectrum`). It is written to mzML as a user
+  parameter and counted in `WriteSummary::warning_counts`. 664 of the 23,293
+  MS2 spectra in the CI bundle have it.
+- Frames that produce no spectrum are counted when a source is built and
+  reported on the run: `TdfSource::projection_gaps()` and
+  `OwnedTdfSource::projection_gaps()` return a `ProjectionGaps`, and the run
+  carries the warning `opentimstdf.frames_not_projected` (frames of an
+  `msms_type` other than 0, 8 and 9, which includes prm-PASEF
+  `msms_type == 10`; diaPASEF frames with no window group; PASEF frames with
+  no `PasefFrameMsMsInfo` row) and `opentimstdf.prm_chromatogram_gaps`
+  (prm-PASEF frames with no `PrmFrameMsMsInfo` row and `PRM` targets with no
+  `PrmTargets` row, which are left out of the SRM chromatograms). These
+  were skipped without a count (#13). The public bundles have none of them.
+  PRM-PASEF frames are still not projected to spectra.
+- `Reader::mz_acquisition_range()` returns the stated m/z acquisition range.
 - `docs/docs/reference/python-api.md` documents `run_info()`,
   `iter_records()`, `read_chromatograms()` and the record dict.
 

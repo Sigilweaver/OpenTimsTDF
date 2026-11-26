@@ -18,7 +18,7 @@ precursors, ...). Mode-specific tables are described in
 | `AcquisitionSoftware`            | str | e.g. `"timsControl"` |
 | `AcquisitionSoftwareVersion`     | str | e.g. `"2.0.18"` |
 | `TimsCompressionType`            | str of int | **1 = raw, 2 = zstd.** See [03-frame-payload-encoding.md](03-frame-payload-encoding.md). |
-| `MzAcqRangeLower` / `Upper`      | str of float | precursor m/z acquisition range |
+| `MzAcqRangeLower` / `Upper`      | str of float | m/z acquisition range of the run |
 | `OneOverK0AcqRangeLower` / `Upper` | str of float | 1/K0 acquisition range |
 | `DigitizerNumSamples`            | str of int | full TOF range of the digitizer |
 | ...                              | ...  | many more - instrument / method / calibration etc. |

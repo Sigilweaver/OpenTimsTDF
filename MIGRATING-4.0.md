@@ -25,7 +25,7 @@ Python needs 3.10 or newer.
 | `precursor.collision_energy: Option<f64>` | `precursor.collision_energies: Vec<CollisionEnergy>`; each has `value` and `unit: Option<CollisionEnergyUnit>` |
 | `precursor.ce_is_nce: bool` | `unit == Some(CollisionEnergyUnit::Nce)`; this reader always writes `Some(CollisionEnergyUnit::Ev)` |
 | `record.retention_time_sec: f64` | `Option<f64>` (always `Some` from this reader) |
-| `record.scan_window` | `record.scan_windows: Vec<ScanWindow>` (empty from this reader) |
+| `record.scan_window` | `record.scan_windows: Vec<ScanWindow>` (one entry, the bundle's stated m/z acquisition range) |
 
 Match on Core enums with a `_` arm. `iter_spectra` and `iter_chromatograms`
 return `Send` iterators.
@@ -58,10 +58,15 @@ Before and after, one PASEF MS2 record (peak arrays elided):
 
 ## mzML output
 
-- `<scanWindowList>` is not written. Core 3 wrote each spectrum's observed
-  m/z range there, which is not the instrument's scan window.
+- `<scanWindowList>` holds the bundle's stated m/z acquisition range
+  (`MzAcqRangeLower` to `MzAcqRangeUpper`). Core 3 wrote each spectrum's
+  observed m/z range there, which is not the instrument's scan window.
 - Spectra with no peaks carry the user parameter
-  `openmassspec: warning opentimstdf.empty_spectrum`.
+  `openmassspec: warning empty_spectrum` and no base peak or observed m/z
+  range (3.0 wrote a base peak and range of 0.0 and no flag).
+- The run carries `openmassspec: warning opentimstdf.frames_not_projected`
+  when frames (prm-PASEF among them) produced no spectrum; the message has
+  the counts.
 - The strict checks in Core's writer (unknown scan mode, collision energy
   with no unit, unsorted or NaN m/z, MS level 0, dangling precursor
   `spectrumRef`) apply. This reader states scan mode and unit, so only the
