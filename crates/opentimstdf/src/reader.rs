@@ -175,6 +175,41 @@ impl Reader {
             .filter(|v| !v.is_empty()))
     }
 
+    /// The m/z acquisition range the bundle states, from
+    /// `GlobalMetadata.MzAcqRangeLower` and `MzAcqRangeUpper`, as
+    /// `(lower, upper)`.
+    ///
+    /// `Ok(None)` when neither key is present. The values are returned as
+    /// stored: the widening applied to the range-fallback calibration for
+    /// `Bruker otofControl` bundles is not part of the stated range.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidMetadata`] when only one key is present, a value does
+    /// not parse as a number, or the range is not `0 < lower < upper`.
+    pub fn mz_acquisition_range(&self) -> Result<Option<(f64, f64)>> {
+        let conn = self.conn.lock().map_err(|_| Error::LockPoisoned)?;
+        let lower = global_meta(&conn, "MzAcqRangeLower")?;
+        let upper = global_meta(&conn, "MzAcqRangeUpper")?;
+        let (lower, upper) = match (lower, upper) {
+            (None, None) => return Ok(None),
+            (Some(l), Some(u)) => (parse_meta_f64(&l), parse_meta_f64(&u)),
+            (l, u) => {
+                return Err(Error::InvalidMetadata(format!(
+                    "GlobalMetadata has MzAcqRangeLower={l:?} but MzAcqRangeUpper={u:?}; \
+                     the m/z acquisition range needs both"
+                )))
+            }
+        };
+        // Written so NaN fails the check.
+        if !(lower > 0.0 && upper > lower) {
+            return Err(Error::InvalidMetadata(format!(
+                "invalid m/z acquisition range: MzAcqRangeLower={lower} MzAcqRangeUpper={upper}"
+            )));
+        }
+        Ok(Some((lower, upper)))
+    }
+
     /// Calibration for the `MzCalibration` row referenced by the most frames.
     ///
     /// Same as `self.bundle_calibration()?.primary()`. In a bundle whose

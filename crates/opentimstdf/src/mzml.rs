@@ -34,14 +34,26 @@
 //! and every precursor collision energy is in eV (see
 //! `COLLISION_ENERGY_UNIT`), so Core's strict writer checks for an unknown
 //! scan mode or collision-energy unit never fire. A spectrum with no decoded
-//! peaks carries the warning [`EMPTY_SPECTRUM_CODE`].
+//! peaks carries Core's [`msc::WarningKind::EmptySpectrum`] warning and
+//! declares no base peak and no m/z range.
+//!
+//! Every spectrum carries one scan window, the bundle's stated m/z
+//! acquisition range (`GlobalMetadata.MzAcqRangeLower` and `MzAcqRangeUpper`,
+//! as stored). Peaks of a bundle recorded by `Bruker otofControl` can lie up
+//! to about 5 m/z outside it. A bundle without the keys, or with values that
+//! are not a range, gets no scan window; the second case is recorded in the
+//! run `extra` key `opentimstdf.scan_window_unavailable`.
 //!
 //! `scan_number` is a monotonic 1-based counter across the whole bundle
 //! (PASEF frames produce many spectra per frame, so frame ID alone is not
 //! unique).
 //!
 //! Frames with `msms_type` other than 0/8/9 (e.g. PRM-PASEF = 10) produce
-//! no spectra. `iter_spectra` decodes one frame at a time as the iterator
+//! no spectra, and so do a diaPASEF frame with no window group and a PASEF
+//! frame with no `PasefFrameMsMsInfo` row. They are counted when the source
+//! is built ([`ProjectionGaps`], read with `projection_gaps()`) and reported
+//! as the run warnings [`FRAMES_NOT_PROJECTED_CODE`] and
+//! [`PRM_CHROMATOGRAM_GAPS_CODE`]. `iter_spectra` decodes one frame at a time as the iterator
 //! is driven. A frame that fails to decode (its peaks, its PASEF or
 //! diaPASEF rows, or a precursor lookup) yields one `Err` item, and
 //! iteration continues with the next frame. The mzML writer stops at the
@@ -68,8 +80,13 @@ use crate::{
 /// See `docs/docs/format/05-instrument-tables.md`.
 const COLLISION_ENERGY_UNIT: msc::CollisionEnergyUnit = msc::CollisionEnergyUnit::Ev;
 
-/// [`msc::Warning`] code on a spectrum that has no peaks.
-pub const EMPTY_SPECTRUM_CODE: &str = "opentimstdf.empty_spectrum";
+/// [`msc::Warning`] code on the run when frames produced no spectrum (see
+/// [`ProjectionGaps`]).
+pub const FRAMES_NOT_PROJECTED_CODE: &str = "opentimstdf.frames_not_projected";
+
+/// [`msc::Warning`] code on the run when prm-PASEF frames or targets left a
+/// gap in the SRM chromatograms (see [`ProjectionGaps`]).
+pub const PRM_CHROMATOGRAM_GAPS_CODE: &str = "opentimstdf.prm_chromatogram_gaps";
 
 const SOFTWARE_NAME: &str = "opentimstdf";
 const SOFTWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -278,8 +295,8 @@ fn base_record(
     // decode failure, but it is flagged so a consumer can tell it from a
     // spectrum that lost its peaks.
     if empty {
-        record.with_warning(msc::Warning::other(
-            EMPTY_SPECTRUM_CODE,
+        record.with_warning(msc::Warning::new(
+            msc::WarningKind::EmptySpectrum,
             "no peaks decoded in this spectrum's frame or mobility scan range",
         ))
     } else {
@@ -404,6 +421,156 @@ fn build_dia_ms2(
     .with_precursor(precursor)
 }
 
+/// Frames and chromatogram targets that the frame -> spectrum projection
+/// leaves out, counted from the bundle's tables when a source is built.
+///
+/// A frame that decodes but produces no spectrum is not an error to the
+/// writer, and Core cannot notice it because the source announces no
+/// spectrum total. This reader counts them instead and reports the counts as
+/// run-level warnings (`opentimstdf.frames_not_projected` and
+/// `opentimstdf.prm_chromatogram_gaps`) on [`msc::RunMetadata::warnings`],
+/// which reach the mzML as `openmassspec: warning` userParams.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ProjectionGaps {
+    /// Frames whose `msms_type` is not projected to spectra, keyed by
+    /// `msms_type`. `10` is prm-PASEF, which feeds only the SRM chromatograms
+    /// (Sigilweaver/OpenTimsTDF#13).
+    pub unprojected_frames: std::collections::BTreeMap<u32, u64>,
+    /// diaPASEF frames (`msms_type == 9`) with no window group in
+    /// `DiaFrameMsMsInfo`, or a group with no `DiaFrameMsMsWindows` rows.
+    pub dia_frames_without_windows: u64,
+    /// PASEF DDA frames (`msms_type == 8`) with no `PasefFrameMsMsInfo` row.
+    pub pasef_frames_without_rows: u64,
+    /// prm-PASEF frames with no `PrmFrameMsMsInfo` row; they add no point to
+    /// any SRM chromatogram.
+    pub prm_frames_without_rows: u64,
+    /// Distinct `PrmFrameMsMsInfo.Target` ids with no `PrmTargets` row; their
+    /// SRM chromatograms are left out.
+    pub prm_targets_without_row: u64,
+}
+
+impl ProjectionGaps {
+    /// Frames that yield no spectrum.
+    pub fn frames_without_spectra(&self) -> u64 {
+        self.unprojected_frames.values().sum::<u64>()
+            + self.dia_frames_without_windows
+            + self.pasef_frames_without_rows
+    }
+
+    /// Count the gaps in `frames`. Reads only table rows; no peaks are decoded.
+    pub fn survey(reader: &Reader, frames: &[Frame]) -> Result<Self> {
+        let mut gaps = ProjectionGaps::default();
+        let mut prm_targets = std::collections::BTreeSet::new();
+        for frame in frames {
+            match frame.msms_type {
+                0 => {}
+                8 => {
+                    if reader.pasef_msms_info_for_frame(frame.id)?.is_empty() {
+                        gaps.pasef_frames_without_rows += 1;
+                    }
+                }
+                9 => {
+                    let has_windows = reader
+                        .dia_windows_for_frame(frame.id)?
+                        .is_some_and(|g| !g.windows.is_empty());
+                    if !has_windows {
+                        gaps.dia_frames_without_windows += 1;
+                    }
+                }
+                other => {
+                    *gaps.unprojected_frames.entry(other).or_default() += 1;
+                    if other == 10 {
+                        let infos = reader.prm_msms_info_for_frame(frame.id)?;
+                        if infos.is_empty() {
+                            gaps.prm_frames_without_rows += 1;
+                        }
+                        prm_targets.extend(infos.iter().map(|i| i.target_id));
+                    }
+                }
+            }
+        }
+        for id in prm_targets {
+            if reader.prm_target(id)?.is_none() {
+                gaps.prm_targets_without_row += 1;
+            }
+        }
+        Ok(gaps)
+    }
+
+    fn warnings(&self) -> Vec<msc::Warning> {
+        let mut out = Vec::new();
+        if self.frames_without_spectra() > 0 {
+            let mut parts = Vec::new();
+            for (msms_type, n) in &self.unprojected_frames {
+                let what = if *msms_type == 10 {
+                    " (prm-PASEF; their peaks feed only the SRM chromatograms)"
+                } else {
+                    ""
+                };
+                parts.push(format!("{n} with msms_type {msms_type}{what}"));
+            }
+            if self.dia_frames_without_windows > 0 {
+                parts.push(format!(
+                    "{} diaPASEF with no window group",
+                    self.dia_frames_without_windows
+                ));
+            }
+            if self.pasef_frames_without_rows > 0 {
+                parts.push(format!(
+                    "{} PASEF with no PasefFrameMsMsInfo row",
+                    self.pasef_frames_without_rows
+                ));
+            }
+            out.push(msc::Warning::other(
+                FRAMES_NOT_PROJECTED_CODE,
+                format!(
+                    "{} frames produced no spectrum: {}",
+                    self.frames_without_spectra(),
+                    parts.join(", ")
+                ),
+            ));
+        }
+        if self.prm_frames_without_rows > 0 || self.prm_targets_without_row > 0 {
+            out.push(msc::Warning::other(
+                PRM_CHROMATOGRAM_GAPS_CODE,
+                format!(
+                    "{} prm-PASEF frames with no PrmFrameMsMsInfo row add no chromatogram point; \
+                     {} PRM targets with no PrmTargets row have no chromatogram",
+                    self.prm_frames_without_rows, self.prm_targets_without_row
+                ),
+            ));
+        }
+        out
+    }
+}
+
+/// What a source reads from the bundle once, when it is built.
+#[derive(Debug, Clone, Default)]
+struct BundleFacts {
+    gaps: ProjectionGaps,
+    /// The bundle's stated m/z acquisition range, written as the scan window of
+    /// every spectrum.
+    scan_window: Option<(f64, f64)>,
+    /// Why `scan_window` is `None` although the bundle has the keys.
+    scan_window_problem: Option<String>,
+}
+
+impl BundleFacts {
+    fn read(reader: &Reader, frames: &[Frame]) -> Result<Self> {
+        let (scan_window, scan_window_problem) = match reader.mz_acquisition_range() {
+            Ok(range) => (range, None),
+            Err(Error::InvalidMetadata(why)) => (None, Some(why)),
+            Err(e) => return Err(e),
+        };
+        Ok(Self {
+            gaps: ProjectionGaps::survey(reader, frames)?,
+            scan_window,
+            scan_window_problem,
+        })
+    }
+}
+
 /// `SpectrumSource` adapter over an open [`Reader`].
 ///
 /// Construct with [`TdfSource::new`]; iterate via the trait's
@@ -421,6 +588,7 @@ pub struct TdfSource<'a> {
     instrument_serial_number: Option<String>,
     calibration: BundleCalibration,
     frames: Vec<Frame>,
+    facts: BundleFacts,
 }
 
 impl<'a> TdfSource<'a> {
@@ -431,6 +599,7 @@ impl<'a> TdfSource<'a> {
         let instrument_serial_number = reader.instrument_serial_number()?;
         let calibration = reader.bundle_calibration()?;
         let frames = reader.frames()?;
+        let facts = BundleFacts::read(reader, &frames)?;
         Ok(Self {
             reader,
             bundle_name: bundle_name.into(),
@@ -438,6 +607,7 @@ impl<'a> TdfSource<'a> {
             instrument_serial_number,
             calibration,
             frames,
+            facts,
         })
     }
 
@@ -451,6 +621,7 @@ impl<'a> TdfSource<'a> {
         let instrument_serial_number = reader.instrument_serial_number()?;
         let calibration = reader.bundle_calibration()?;
         let frames = reader.frames()?;
+        let facts = BundleFacts::read(&reader, &frames)?;
         let bundle_name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -462,7 +633,14 @@ impl<'a> TdfSource<'a> {
             instrument_serial_number,
             calibration,
             frames,
+            facts,
         })
+    }
+
+    /// Frames and chromatogram targets this source leaves out; see
+    /// [`ProjectionGaps`].
+    pub fn projection_gaps(&self) -> &ProjectionGaps {
+        &self.facts.gaps
     }
 }
 
@@ -475,6 +653,15 @@ pub struct OwnedTdfSource {
     instrument_serial_number: Option<String>,
     calibration: BundleCalibration,
     frames: Vec<Frame>,
+    facts: BundleFacts,
+}
+
+impl OwnedTdfSource {
+    /// Frames and chromatogram targets this source leaves out; see
+    /// [`ProjectionGaps`].
+    pub fn projection_gaps(&self) -> &ProjectionGaps {
+        &self.facts.gaps
+    }
 }
 
 // `Frame::scan_mode` (`Frames.ScanMode`) is deliberately not consulted in
@@ -504,6 +691,7 @@ fn spectra_for_frame(
     reader: &Reader,
     frame: &Frame,
     calibration: &Calibration,
+    scan_window: Option<(f64, f64)>,
     scan_counter: &mut u32,
 ) -> Result<Vec<msc::SpectrumRecord>> {
     if !matches!(frame.msms_type, 0 | 8 | 9) {
@@ -547,6 +735,9 @@ fn spectra_for_frame(
     };
     *scan_counter = counter;
     for record in &mut records {
+        if let Some((lower, upper)) = scan_window {
+            record.scan_windows = vec![msc::ScanWindow::new(lower, upper)];
+        }
         record
             .extra
             .insert("opentimstdf.frame_id".into(), frame.id.to_string());
@@ -600,6 +791,7 @@ fn frame_iter<'s>(
     reader: &'s Reader,
     frames: &'s [Frame],
     calibration: &'s BundleCalibration,
+    scan_window: Option<(f64, f64)>,
 ) -> impl Iterator<Item = msc::Result<msc::SpectrumRecord>> + 's {
     let mut frame_idx = 0usize;
     let mut pending = std::collections::VecDeque::new();
@@ -611,7 +803,7 @@ fn frame_iter<'s>(
         let frame = frames.get(frame_idx)?;
         frame_idx += 1;
         let cal = calibration.for_frame(frame);
-        match spectra_for_frame(reader, frame, &cal, &mut scan_counter) {
+        match spectra_for_frame(reader, frame, &cal, scan_window, &mut scan_counter) {
             Ok(records) => pending.extend(records),
             Err(e) => return Some(Err(e.into())),
         }
@@ -623,6 +815,7 @@ fn run_metadata_for(
     bundle_name: &str,
     instrument_serial_number: Option<&str>,
     mz_calibration: &MzCalibrationStatus,
+    facts: &BundleFacts,
 ) -> msc::RunMetadata {
     let mut extra = ::std::collections::BTreeMap::new();
     extra.insert(
@@ -654,7 +847,10 @@ fn run_metadata_for(
     if let Some(value) = &meta.acquisition_date_time {
         extra.insert("opentimstdf.acquisition_date_time".into(), value.clone());
     }
-    msc::RunMetadata::new(
+    if let Some(why) = &facts.scan_window_problem {
+        extra.insert("opentimstdf.scan_window_unavailable".into(), why.clone());
+    }
+    let mut run = msc::RunMetadata::new(
         bundle_name,
         source_file_format_cv(),
         native_id_format_cv(),
@@ -693,7 +889,11 @@ fn run_metadata_for(
             .map(str::to_string),
     )
     .with_mobility_array_kind(msc::MobilityArrayKind::InverseReducedVsPerCm2)
-    .with_extra_map(extra)
+    .with_extra_map(extra);
+    for warning in facts.gaps.warnings() {
+        run = run.with_warning(warning);
+    }
+    run
 }
 
 /// Build the whole-run chromatogram traces from the already-decoded per-frame
@@ -818,7 +1018,8 @@ fn build_srm_record(
 /// A frame that fails to decode, or whose `PrmFrameMsMsInfo` or `PrmTargets`
 /// lookup fails, makes the whole function return `Err`. A frame with no
 /// `PrmFrameMsMsInfo` rows contributes nothing, and a target id that has no
-/// `PrmTargets` row is left out. A target that never appears
+/// `PrmTargets` row is left out; both are counted in [`ProjectionGaps`] and
+/// reported as the run warning [`PRM_CHROMATOGRAM_GAPS_CODE`]. A target that never appears
 /// in any `PrmFrameMsMsInfo` row (e.g. an unused entry in a shared target
 /// list) is omitted from the output entirely, rather than emitted with an
 /// empty trace - the same no-empty-chromatogram contract
@@ -896,10 +1097,16 @@ impl<'a> msc::SpectrumSource for TdfSource<'a> {
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
             self.calibration.status(),
+            &self.facts,
         )
     }
     fn iter_spectra<'s>(&'s mut self) -> msc::SpectrumIter<'s> {
-        Box::new(frame_iter(self.reader, &self.frames, &self.calibration))
+        Box::new(frame_iter(
+            self.reader,
+            &self.frames,
+            &self.calibration,
+            self.facts.scan_window,
+        ))
     }
     fn iter_chromatograms<'s>(&'s mut self) -> msc::ChromatogramIter<'s> {
         chromatogram_iter(self.reader, &self.frames)
@@ -913,10 +1120,16 @@ impl msc::SpectrumSource for OwnedTdfSource {
             &self.bundle_name,
             self.instrument_serial_number.as_deref(),
             self.calibration.status(),
+            &self.facts,
         )
     }
     fn iter_spectra<'s>(&'s mut self) -> msc::SpectrumIter<'s> {
-        Box::new(frame_iter(&self.reader, &self.frames, &self.calibration))
+        Box::new(frame_iter(
+            &self.reader,
+            &self.frames,
+            &self.calibration,
+            self.facts.scan_window,
+        ))
     }
     fn iter_chromatograms<'s>(&'s mut self) -> msc::ChromatogramIter<'s> {
         chromatogram_iter(&self.reader, &self.frames)
@@ -1059,10 +1272,11 @@ mod tests {
         }];
         let empty = build_ms1(1, &frame, &[], &cal);
         assert_eq!(empty.warnings.len(), 1);
-        assert_eq!(
-            empty.warnings[0].kind,
-            msc::WarningKind::Other(EMPTY_SPECTRUM_CODE.into())
-        );
+        assert_eq!(empty.warnings[0].kind, msc::WarningKind::EmptySpectrum);
+        assert_eq!(empty.base_peak_mz, None);
+        assert_eq!(empty.base_peak_intensity, None);
+        assert_eq!(empty.low_mz, None);
+        assert_eq!(empty.high_mz, None);
         let full = build_ms1(2, &frame, &peaks, &cal);
         assert!(full.warnings.is_empty());
     }
@@ -1232,7 +1446,13 @@ mod tests {
     #[test]
     fn run_metadata_for_records_mz_calibration_model() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(
             rm.extra
                 .get("opentimstdf.mz_calibration")
@@ -1244,7 +1464,7 @@ mod tests {
             .contains_key("opentimstdf.mz_calibration_fallback_reason"));
 
         let fallback = MzCalibrationStatus::range_fallback("the MzCalibration table is absent");
-        let rm = run_metadata_for(&meta, "bundle.d", None, &fallback);
+        let rm = run_metadata_for(&meta, "bundle.d", None, &fallback, &BundleFacts::default());
         assert_eq!(
             rm.extra
                 .get("opentimstdf.mz_calibration")
@@ -1262,7 +1482,13 @@ mod tests {
     #[test]
     fn run_metadata_for_wires_up_start_timestamp() {
         let meta = sample_metadata(Some("2018-08-21T20:40:14.356+02:00"));
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(
             rm.start_timestamp.as_deref(),
             Some("2018-08-21T20:40:14.356+02:00")
@@ -1272,7 +1498,13 @@ mod tests {
     #[test]
     fn run_metadata_for_none_when_absent() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.start_timestamp, None);
     }
 
@@ -1281,14 +1513,26 @@ mod tests {
         // Defensive path: don't claim RFC 3339 compliance for a value that
         // isn't, even though no real-world bundle observed so far hits this.
         let meta = sample_metadata(Some("2019-01-17T09:14:39.730"));
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.start_timestamp, None);
     }
 
     #[test]
     fn run_metadata_for_wires_up_acquisition_software() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.acquisition_software_name.as_deref(), Some("timsControl"));
         assert_eq!(rm.acquisition_software_version.as_deref(), Some("2.0.18"));
     }
@@ -1296,9 +1540,21 @@ mod tests {
     #[test]
     fn run_metadata_for_passes_through_serial_number() {
         let meta = sample_metadata(None);
-        let rm = run_metadata_for(&meta, "bundle.d", Some("1234567.10"), &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            Some("1234567.10"),
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.instrument_serial_number.as_deref(), Some("1234567.10"));
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.instrument_serial_number, None);
     }
 
@@ -1307,7 +1563,13 @@ mod tests {
         let mut meta = sample_metadata(None);
         meta.acquisition_software = String::new();
         meta.acquisition_software_version = String::new();
-        let rm = run_metadata_for(&meta, "bundle.d", None, &tables_status());
+        let rm = run_metadata_for(
+            &meta,
+            "bundle.d",
+            None,
+            &tables_status(),
+            &BundleFacts::default(),
+        );
         assert_eq!(rm.acquisition_software_name, None);
         assert_eq!(rm.acquisition_software_version, None);
     }

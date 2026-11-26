@@ -87,6 +87,21 @@ def test_ms2_record_keys():
     assert len(ms2["mz"]) == len(ms2["intensity"])
     assert "warnings" not in ms2
 
+    # The scan window is the m/z acquisition range the bundle states.
+    con = sqlite3.connect(f"file:{_corpus_bundle() / 'analysis.tdf'}?mode=ro", uri=True)
+    stated = dict(
+        con.execute(
+            "SELECT Key, Value FROM GlobalMetadata WHERE Key LIKE 'MzAcqRange%'"
+        ).fetchall()
+    )
+    con.close()
+    window = {
+        "lower": float(stated["MzAcqRangeLower"]),
+        "upper": float(stated["MzAcqRangeUpper"]),
+    }
+    assert ms1["scan_windows"] == [window]
+    assert ms2["scan_windows"] == [window]
+
 
 def test_empty_spectrum_warning():
     """A PASEF range with no decoded peaks is flagged, not silently empty."""
@@ -98,7 +113,7 @@ def test_empty_spectrum_warning():
     empty = next(r for r in reader.iter_records() if r["native_id"] == "frame=20 scan=502-527")
     assert len(empty["mz"]) == 0
     assert empty["base_peak_mz"] is None and empty["low_mz"] is None
-    assert [w["kind"] for w in empty["warnings"]] == ["opentimstdf.empty_spectrum"]
+    assert [w["kind"] for w in empty["warnings"]] == ["empty_spectrum"]
 
 
 def _empty_bin_bundle(root: Path) -> Path:
@@ -139,3 +154,36 @@ def test_empty_tdf_bin_raises(tmp_path):
         reader.decode_peaks(frame)
     with pytest.raises(RuntimeError, match="corrupt frame 1"):
         next(reader.iter_records())
+
+
+def test_unprojected_frames_are_flagged_in_run_info(tmp_path):
+    """prm-PASEF frames produce no spectrum; the run says how many."""
+    bundle = tmp_path / "prm.d"
+    bundle.mkdir()
+    (bundle / "analysis.tdf_bin").write_bytes(b"")
+    con = sqlite3.connect(bundle / "analysis.tdf")
+    con.executescript(
+        """
+        CREATE TABLE GlobalMetadata (Key TEXT PRIMARY KEY, Value TEXT);
+        INSERT INTO GlobalMetadata VALUES
+          ('TimsCompressionType', '2'),
+          ('OneOverK0AcqRangeLower', '0.6'),
+          ('OneOverK0AcqRangeUpper', '1.6'),
+          ('MzAcqRangeLower', '100'),
+          ('MzAcqRangeUpper', '1700'),
+          ('DigitizerNumSamples', '400000'),
+          ('InstrumentName', 'timsTOF Pro');
+        CREATE TABLE Frames (Id INTEGER PRIMARY KEY, Time REAL, NumScans INTEGER,
+          NumPeaks INTEGER, TimsId INTEGER, Polarity TEXT, ScanMode INTEGER,
+          MsMsType INTEGER, MzCalibration INTEGER, AccumulationTime REAL,
+          SummedIntensities INTEGER, MaxIntensity INTEGER);
+        INSERT INTO Frames VALUES (1, 0.1, 2, 0, 0, '+', 10, 0, 1, 100.0, 0, 0);
+        INSERT INTO Frames VALUES (2, 0.2, 2, 0, 0, '+', 10, 10, 1, 100.0, 0, 0);
+        INSERT INTO Frames VALUES (3, 0.3, 2, 0, 0, '+', 10, 10, 1, 100.0, 0, 0);
+        """
+    )
+    con.commit()
+    con.close()
+    run = opentimstdf.Reader(str(bundle)).run_info()
+    codes = {w["kind"]: w["message"] for w in run["warnings"]}
+    assert "2 with msms_type 10" in codes["opentimstdf.frames_not_projected"]
