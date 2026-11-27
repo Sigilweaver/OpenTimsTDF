@@ -45,6 +45,10 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
   34,287 (PXD031833) and 63,768 of 83,525 (PXD025576); see Known issues in
   the README. A bundle with no such keys, or values that are not a range, gets no scan window and the
   run `extra` key `opentimstdf.scan_window_unavailable` names why.
+- `ProjectionGaps::survey` runs when a `TdfSource` or `OwnedTdfSource` is
+  built, so a SQL error while surveying (for example a corrupt
+  `PasefFrameMsMsInfo` table) fails source construction. It is not a
+  per-frame error that `RecordErrorPolicy::Skip` can skip.
 - `PasefMsMsInfo`, `DiaWindow` and `PrmMsMsInfo` `collision_energy` values
   are documented as eV (the bundle's `PropertyDefinitions` table gives `eV`
   as the dimension of every collision-energy setting).
@@ -73,7 +77,9 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
   (prm-PASEF frames with no `PrmFrameMsMsInfo` row and `PRM` targets with no
   `PrmTargets` row, which are left out of the SRM chromatograms). These
   were skipped without a count (#13). The public bundles have none of them.
-  PRM-PASEF frames are still not projected to spectra.
+  PRM-PASEF frames are still not projected to spectra. The two warning codes
+  are the public constants `mzml::FRAMES_NOT_PROJECTED_CODE` and
+  `mzml::PRM_CHROMATOGRAM_GAPS_CODE`.
 - `Reader::mz_acquisition_range()` returns the stated m/z acquisition range.
 - `docs/docs/reference/python-api.md` documents `run_info()`,
   `iter_records()`, `read_chromatograms()` and the record dict.
