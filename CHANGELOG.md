@@ -6,6 +6,86 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-27
+
+Adopts `openmassspec-core` 4.0. Rust and Python users of the canonical
+record API need small edits; see [MIGRATING-4.0.md](MIGRATING-4.0.md) and
+Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/main/MIGRATING-4.0.md).
+
+### Changed
+
+- **Breaking:** the minimum Python version is 3.10 (`requires-python
+  >=3.10`, abi3-py310 wheels). It was 3.8.
+- **Breaking:** requires `openmassspec-core` 4.0. `TdfSource` and
+  `OwnedTdfSource` yield Core 4 `SpectrumRecord`s, and the iterators they
+  return are `Send`.
+- **Breaking (Python):** record dicts from `Reader.iter_records()` carry
+  `precursor["collision_energies"]`, a list of `{"value", "unit"}` with
+  `unit == "ev"`, in place of `collision_energy` and `ce_is_nce`.
+  `analyzer` (on the record and on the precursor) is `"tof"`, where it was
+  `"tofms"`. `warnings` is present on a spectrum that has any. The
+  `scan_window` key is `scan_windows`, a list of `{lower, upper}`; see the
+  mzML change below.
+- The mzML writer in Core 4 applies strict checks to every spectrum: an
+  unknown scan mode, a collision energy with no unit, an unsorted or NaN
+  m/z array, MS level 0 and a precursor `spectrumRef` that names a spectrum
+  that is not in the output are errors. Every spectrum this reader emits
+  states its scan mode (centroid) and its collision-energy unit (eV), and
+  m/z is sorted with a total order, so a bundle that converted with 3.0
+  converts with 4.0. A parent MS1 frame that is not written still makes
+  its PASEF spectra a dangling reference (`dangling_precursor_ref`); see
+  Known issues in the README.
+- mzML `<scanWindowList>` holds the bundle's stated m/z acquisition range
+  (`GlobalMetadata.MzAcqRangeLower` and `MzAcqRangeUpper`, as stored) on
+  every spectrum. Core 3 wrote the observed m/z range of each spectrum
+  there, which is not the instrument's scan window. Core 4 writes it only
+  from `SpectrumRecord::scan_windows`. On the three public bundles it is
+  300 to 1600 m/z (DDA-PASEF) and 99.992696 to 1700 (diaPASEF). It is not
+  widened and does not bound the peaks: observed m/z can exceed it by up to
+  5.0 on either side. On the three public bundles (all `Bruker otofControl`)
+  spectra with a peak outside it are 5,086 of 24,425 (PXD036417), 10,934 of
+  34,287 (PXD031833) and 63,768 of 83,525 (PXD025576); see Known issues in
+  the README. A bundle with no such keys, or values that are not a range, gets no scan window and the
+  run `extra` key `opentimstdf.scan_window_unavailable` names why.
+- `ProjectionGaps::survey` runs when a `TdfSource` or `OwnedTdfSource` is
+  built, so a SQL error while surveying (for example a corrupt
+  `PasefFrameMsMsInfo` table) fails source construction. It is not a
+  per-frame error that `RecordErrorPolicy::Skip` can skip.
+- `PasefMsMsInfo`, `DiaWindow` and `PrmMsMsInfo` `collision_energy` values
+  are documented as eV (the bundle's `PropertyDefinitions` table gives `eV`
+  as the dimension of every collision-energy setting).
+
+### Fixed
+
+- A spectrum with no decoded peaks reports no base peak and no observed m/z
+  range (`None`) instead of `0.0`. The mzML for such a spectrum no longer
+  carries `lowest observed m/z`, `highest observed m/z` or base-peak values
+  of 0.
+
+### Added
+
+- A spectrum with no decoded peaks (a PASEF or diaPASEF mobility range with
+  no peaks, or an MS1 frame with none) carries Core's `empty_spectrum`
+  warning (`WarningKind::EmptySpectrum`). It is written to mzML as a user
+  parameter and counted in `WriteSummary::warning_counts`. 664 of the 23,293
+  MS2 spectra in the CI bundle have it.
+- Frames that produce no spectrum are counted when a source is built and
+  reported on the run: `TdfSource::projection_gaps()` and
+  `OwnedTdfSource::projection_gaps()` return a `ProjectionGaps`, and the run
+  carries the warning `opentimstdf.frames_not_projected` (frames of an
+  `msms_type` other than 0, 8 and 9, which includes prm-PASEF
+  `msms_type == 10`; diaPASEF frames with no window group; PASEF frames with
+  no `PasefFrameMsMsInfo` row) and `opentimstdf.prm_chromatogram_gaps`
+  (prm-PASEF frames with no `PrmFrameMsMsInfo` row and `PRM` targets with no
+  `PrmTargets` row, which are left out of the SRM chromatograms). These
+  were skipped without a count (#13). The public bundles have none of them.
+  PRM-PASEF frames are still not projected to spectra. The two warning codes
+  are the public constants `mzml::FRAMES_NOT_PROJECTED_CODE` and
+  `mzml::PRM_CHROMATOGRAM_GAPS_CODE`.
+- `Reader::mz_acquisition_range()` returns the stated m/z acquisition range.
+- `docs/docs/reference/python-api.md` documents `run_info()`,
+  `iter_records()`, `read_chromatograms()` and the record dict.
+
 ## [3.0.1] - 2026-11-18
 
 Dependency update. No public API change.

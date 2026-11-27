@@ -13,7 +13,7 @@ Published on [crates.io](https://crates.io/crates/opentimstdf).
 ```toml
 # Cargo.toml
 [dependencies]
-opentimstdf = "3"
+opentimstdf = "4"
 ```
 
 From source:
@@ -26,7 +26,7 @@ cargo build --release
 
 ### Requirements
 
-- Rust 1.75 or later.
+- Rust 1.95 or later.
 - A C toolchain is required transitively for `rusqlite` (bundled SQLite)
   and `zstd`: `build-essential` on Linux, Xcode Command Line Tools on
   macOS, or MSVC build tools on Windows.
@@ -42,7 +42,8 @@ pip install opentimstdf
 ```
 
 Built with [PyO3](https://pyo3.rs) and [maturin](https://www.maturin.rs);
-wheels target Python 3.9+.
+wheels target Python 3.10+ (one abi3 wheel per platform;
+see [SUPPORT.md](https://github.com/Sigilweaver/ops/blob/main/SUPPORT.md)).
 
 From source (requires a working Rust toolchain and `maturin`):
 

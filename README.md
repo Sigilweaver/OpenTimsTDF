@@ -106,7 +106,44 @@ full quickstart, guide, and format specification.
   incomplete upload) fails on its first frame.
 - **PRM-PASEF frames are not converted to spectra.** `MsMsType = 10`
   frames are skipped by `iter_spectra` and mzML; they feed only the SRM
-  chromatograms. The corpus has PRM-PASEF metadata but no frame data.
+  chromatograms. The corpus has PRM-PASEF metadata but no frame data. The
+  frames are counted: the run carries the warning
+  `opentimstdf.frames_not_projected` with the count (and
+  `TdfSource::projection_gaps()` returns it), and the warning
+  `opentimstdf.prm_chromatogram_gaps` counts prm-PASEF frames with no
+  `PrmFrameMsMsInfo` row and targets with no `PrmTargets` row. The same
+  warning counts diaPASEF frames with no window group and PASEF frames with
+  no `PasefFrameMsMsInfo` row. See #13.
+- **Collision energy is one value in eV per spectrum.** `PasefFrameMsMsInfo`
+  and `DiaFrameMsMsWindows` carry the collision energy without a unit column.
+  The bundle's own `PropertyDefinitions` table gives `eV` as the dimension of
+  every collision-energy setting, and the stored values fall inside the
+  acquisition's collision-energy ramp, so records state `ev`.
+  `CollisionEnergySweepingInfo` (stepped sweeps) is not read; no public bundle
+  has rows in it.
+- **A PASEF spectrum whose parent MS1 frame is not written is rejected.**
+  `Precursors.Parent` names the MS1 frame a precursor was selected from, and
+  the record's `spectrumRef` points at that frame's spectrum. When that frame
+  is not in the output (it failed to decode while the writer skips bad records,
+  or `Parent` names no MS1 frame), Core's mzML writer reports a dangling
+  precursor reference. Check name `dangling_precursor_ref`:
+  `WriteOptions::with_leniency` with `Check::DanglingPrecursorRef` writes the
+  spectrum without the reference and adds a warning.
+- **Spectra with no peaks are written empty and flagged.** A mobility range
+  or frame with no decoded peaks (664 of 23,293 MS2 spectra in the CI bundle)
+  carries Core's warning `empty_spectrum`, and declares no base peak or m/z
+  range.
+- **Observed m/z can lie outside the scan window.** Every spectrum's
+  `scanWindowList` holds the stated `MzAcqRangeLower` to `MzAcqRangeUpper`
+  from the bundle's `GlobalMetadata`, as stored; it is not widened and not
+  checked against the peaks. The stated range does not bound them: in the
+  three public bundles (all recorded by `Bruker otofControl`), observed m/z
+  reaches up to 5.0 beyond the limits on both sides. Spectra with a peak
+  outside the window: PXD036417 5,086 of 24,425 (window 300 to 1600),
+  PXD031833 10,934 of 34,287 (300 to 1600) and PXD025576 63,768 of 83,525
+  (99.992696 to 1700). Do not use the scan window as a filter or as the
+  limit of the observed m/z range; read the peaks themselves. A bundle
+  without the keys has no scan window.
 - **Only TDF bundles are read.** TSF bundles (TIMS off, MALDI) and BAF
   bundles are not supported.
 - **Tested data:** timsTOF Pro, Pro 2 and SCP, DDA-PASEF and diaPASEF,
