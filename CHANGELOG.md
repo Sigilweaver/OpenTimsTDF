@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-27
+
 Adopts `openmassspec-core` 4.0. Rust and Python users of the canonical
 record API need small edits; see [MIGRATING-4.0.md](MIGRATING-4.0.md) and
 Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/main/MIGRATING-4.0.md).
