@@ -26,7 +26,7 @@ cargo build --release
 
 ### Requirements
 
-- Rust 1.75 or later.
+- Rust 1.95 or later.
 - A C toolchain is required transitively for `rusqlite` (bundled SQLite)
   and `zstd`: `build-essential` on Linux, Xcode Command Line Tools on
   macOS, or MSVC build tools on Windows.
