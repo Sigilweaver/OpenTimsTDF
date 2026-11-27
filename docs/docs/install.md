@@ -13,7 +13,7 @@ Published on [crates.io](https://crates.io/crates/opentimstdf).
 ```toml
 # Cargo.toml
 [dependencies]
-opentimstdf = "3"
+opentimstdf = "4"
 ```
 
 From source:
