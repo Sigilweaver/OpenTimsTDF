@@ -20,6 +20,9 @@ env:
   # CI_BUNDLE in crates/opentimstdf/tests/common/mod.rs.
   BRUKER_ZIP_URL: >-
     https://ftp.pride.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_ZIP_FALLBACK_URL: >-
+    https://ftp.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_ZIP_SHA256: 5f2abbb3ae98c57bece0b427536f3e6f590658dc0049238af3aa88041c1a0b21
   BRUKER_BUNDLE: NQO1-F107C_coi-N2-P_200-0C_3996.d
 
 jobs:
@@ -50,15 +53,23 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Download corpus fixture for conformance tests
-        # Downloading the ~90 MB zip on every OS leg of the matrix would
-        # triple the cost of this fetch for no benefit (the conformance
-        # test's decode path isn't OS-specific), so only fetch it on Linux.
+      # Fetching the ~90 MB zip on every OS leg of the matrix would triple
+      # the cost for no benefit (the conformance test's decode path isn't
+      # OS-specific), so only fetch it on Linux.
+      - name: Fetch Bruker sample
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 30
+        uses: Sigilweaver/ops/.github/actions/fetch-fixture@cf88ab9d4e06ce360ee0659bde8d10081ea4de17
+        with:
+          destination: .
+          user-agent: OpenTimsTDF-CI/1.0
+          fixtures: |
+            bruker.d.zip ${{ env.BRUKER_ZIP_SHA256 }} ${{ env.BRUKER_ZIP_URL }} ${{ env.BRUKER_ZIP_FALLBACK_URL }}
+
+      - name: Unzip corpus fixture for conformance tests
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir -p corpus
-          wget -q --user-agent="OpenTimsTDF-CI/1.0" -O bruker.d.zip "$BRUKER_ZIP_URL"
-          echo "Downloaded $(du -sh bruker.d.zip | cut -f1) zip"
           unzip -q -d corpus bruker.d.zip
           test -d "corpus/$BRUKER_BUNDLE" || (echo "expected bundle dir corpus/$BRUKER_BUNDLE missing" && exit 1)
           rm bruker.d.zip

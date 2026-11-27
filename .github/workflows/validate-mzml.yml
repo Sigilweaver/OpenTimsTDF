@@ -21,6 +21,9 @@ env:
   # Bruker timsTOF .d bundle (~90 MB zipped) from PRIDE PXD036417.
   BRUKER_ZIP_URL: >-
     https://ftp.pride.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_ZIP_FALLBACK_URL: >-
+    https://ftp.ebi.ac.uk/pride/data/archive/2022/11/PXD036417/NQO1-F107C_coi-N2-P_200-0C_3996.d.zip
+  BRUKER_ZIP_SHA256: 5f2abbb3ae98c57bece0b427536f3e6f590658dc0049238af3aa88041c1a0b21
   BRUKER_BUNDLE: NQO1-F107C_coi-N2-P_200-0C_3996.d
 
 jobs:
@@ -42,10 +45,17 @@ jobs:
       - name: Ensure xmllint is available
         run: command -v xmllint || (sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils)
 
-      - name: Download and unzip Bruker sample
+      - name: Fetch Bruker sample
+        timeout-minutes: 30
+        uses: Sigilweaver/ops/.github/actions/fetch-fixture@cf88ab9d4e06ce360ee0659bde8d10081ea4de17
+        with:
+          destination: .
+          user-agent: OpenTimsTDF-CI/1.0
+          fixtures: |
+            bruker.d.zip ${{ env.BRUKER_ZIP_SHA256 }} ${{ env.BRUKER_ZIP_URL }} ${{ env.BRUKER_ZIP_FALLBACK_URL }}
+
+      - name: Unzip Bruker sample
         run: |
-          wget -q --user-agent="OpenTimsTDF-CI/1.0" -O bruker.d.zip "$BRUKER_ZIP_URL"
-          echo "Downloaded $(du -sh bruker.d.zip | cut -f1) zip"
           unzip -q bruker.d.zip
           test -d "$BRUKER_BUNDLE" || (echo "expected bundle dir $BRUKER_BUNDLE missing" && exit 1)
 
