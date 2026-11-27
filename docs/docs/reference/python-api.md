@@ -67,7 +67,7 @@ Python lists or `None`; everything else is plain Python values.
 | `retention_time_sec` | `float`, the frame time in seconds |
 | `polarity`, `scan_mode`, `analyzer` | Core labels: `"positive"`/`"negative"`, `"centroid"`, `"tof"` |
 | `precursor` | `None` for MS1, else a dict (below) |
-| `scan_windows` | list of `{lower, upper}`: the bundle's stated m/z acquisition range; empty and omitted when the bundle states none |
+| `scan_windows` | list of `{lower, upper}`: the bundle's stated m/z acquisition range, as stored; observed m/z can exceed it by up to 5.0 (see Known issues in the README); empty and omitted when the bundle states none |
 | `warnings` | list of `{kind, message}`; present only when non-empty. `empty_spectrum` marks a spectrum with no decoded peaks |
 | `extra` | `opentimstdf.*` frame fields as strings |
 

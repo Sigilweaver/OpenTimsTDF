@@ -38,10 +38,12 @@ Core's [MIGRATING-4.0.md](https://github.com/Sigilweaver/OpenMassSpecCore/blob/m
   every spectrum. Core 3 wrote the observed m/z range of each spectrum
   there, which is not the instrument's scan window. Core 4 writes it only
   from `SpectrumRecord::scan_windows`. On the three public bundles it is
-  300 to 1600 m/z (DDA-PASEF) and 99.992696 to 1700 (diaPASEF); on bundles
-  recorded by `Bruker otofControl`, peaks of some spectra lie up to about 5
-  m/z outside it (5,086 of 24,425 spectra in the CI bundle). A bundle with
-  no such keys, or values that are not a range, gets no scan window and the
+  300 to 1600 m/z (DDA-PASEF) and 99.992696 to 1700 (diaPASEF). It is not
+  widened and does not bound the peaks: observed m/z can exceed it by up to
+  5.0 on either side. On the three public bundles (all `Bruker otofControl`)
+  spectra with a peak outside it are 5,086 of 24,425 (PXD036417), 10,934 of
+  34,287 (PXD031833) and 63,768 of 83,525 (PXD025576); see Known issues in
+  the README. A bundle with no such keys, or values that are not a range, gets no scan window and the
   run `extra` key `opentimstdf.scan_window_unavailable` names why.
 - `PasefMsMsInfo`, `DiaWindow` and `PrmMsMsInfo` `collision_energy` values
   are documented as eV (the bundle's `PropertyDefinitions` table gives `eV`

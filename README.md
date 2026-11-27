@@ -133,11 +133,17 @@ full quickstart, guide, and format specification.
   or frame with no decoded peaks (664 of 23,293 MS2 spectra in the CI bundle)
   carries Core's warning `empty_spectrum`, and declares no base peak or m/z
   range.
-- **The scan window is the stated acquisition range.** Every spectrum's
-  `scanWindowList` holds `MzAcqRangeLower` to `MzAcqRangeUpper` from the
-  bundle's `GlobalMetadata`, as stored. Peaks in bundles recorded by
-  `Bruker otofControl` can lie up to about 5 m/z outside it (5,086 of 24,425
-  spectra in the CI bundle). A bundle without the keys has no scan window.
+- **Observed m/z can lie outside the scan window.** Every spectrum's
+  `scanWindowList` holds the stated `MzAcqRangeLower` to `MzAcqRangeUpper`
+  from the bundle's `GlobalMetadata`, as stored; it is not widened and not
+  checked against the peaks. The stated range does not bound them: in the
+  three public bundles (all recorded by `Bruker otofControl`), observed m/z
+  reaches up to 5.0 beyond the limits on both sides. Spectra with a peak
+  outside the window: PXD036417 5,086 of 24,425 (window 300 to 1600),
+  PXD031833 10,934 of 34,287 (300 to 1600) and PXD025576 63,768 of 83,525
+  (99.992696 to 1700). Do not use the scan window as a filter or as the
+  limit of the observed m/z range; read the peaks themselves. A bundle
+  without the keys has no scan window.
 - **Only TDF bundles are read.** TSF bundles (TIMS off, MALDI) and BAF
   bundles are not supported.
 - **Tested data:** timsTOF Pro, Pro 2 and SCP, DDA-PASEF and diaPASEF,

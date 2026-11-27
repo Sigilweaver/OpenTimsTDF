@@ -60,7 +60,9 @@ Before and after, one PASEF MS2 record (peak arrays elided):
 
 - `<scanWindowList>` holds the bundle's stated m/z acquisition range
   (`MzAcqRangeLower` to `MzAcqRangeUpper`). Core 3 wrote each spectrum's
-  observed m/z range there, which is not the instrument's scan window.
+  observed m/z range there, which is not the instrument's scan window. It
+  does not bound the peaks: observed m/z can exceed it by up to 5.0 on either
+  side (see Known issues in the README for the public counts).
 - Spectra with no peaks carry the user parameter
   `openmassspec: warning empty_spectrum` and no base peak or observed m/z
   range (3.0 wrote a base peak and range of 0.0 and no flag).
